@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // Git-ignored copies of old-repo source data (docs/DATABASE.md §8).
+    'scripts/import/data/**',
   ]),
 ]);
 

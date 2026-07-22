@@ -22,7 +22,8 @@ replacing the React SPA + S3-JSON architecture in the old repo (`done/6. Attract
 - [x] Database plan approved (2026-07-22)
 - [x] Scaffold Next.js + Prisma (multi-file schema per docs/DATABASE.md §9)
 - [x] First migration + seed (locales, RBAC, settings)
-- [ ] Import scripts (docs/DATABASE.md §8 — copy source data from the old repo at import time)
+- [x] Import scripts (docs/DATABASE.md §8 — dev run against old-repo copies; cutover re-runs
+      them against fresh S3 exports + the live-S3 vs repo `products.json` diff described in §8)
 - [ ] App phases (routing/i18n, catalog, portfolio, dashboard, SEO wiring)
 
 **Open decisions before data entry starts:** price unit vocabulary (per m² / box / piece);
