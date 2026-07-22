@@ -13,7 +13,8 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "import:data": "tsx scripts/import/index.ts"
+    "import:data": "tsx scripts/import/index.ts",
+    "verify:db": "tsx scripts/verify/db-checks.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

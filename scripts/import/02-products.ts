@@ -98,22 +98,37 @@ export async function importProducts(): Promise<ProductsReport> {
   const facetMap = async (rows: Promise<{ id: string; code: string }[]>) =>
     new Map((await rows).map((r) => [r.code, r.id]));
   const select = { select: { id: true, code: true } };
-  const [types, materials, looks, colors, finishes, collections, brands, sources, applications, perfs] =
-    await Promise.all([
-      facetMap(prisma.productType.findMany(select)),
-      facetMap(prisma.material.findMany(select)),
-      facetMap(prisma.look.findMany(select)),
-      facetMap(prisma.color.findMany(select)),
-      facetMap(prisma.finish.findMany(select)),
-      facetMap(prisma.collection.findMany(select)),
-      facetMap(prisma.brand.findMany(select)),
-      facetMap(prisma.source.findMany(select)),
-      facetMap(prisma.application.findMany(select)),
-      facetMap(prisma.performanceAttribute.findMany(select)),
-    ]);
+  const [
+    types,
+    materials,
+    looks,
+    colors,
+    finishes,
+    collections,
+    brands,
+    sources,
+    applications,
+    perfs,
+  ] = await Promise.all([
+    facetMap(prisma.productType.findMany(select)),
+    facetMap(prisma.material.findMany(select)),
+    facetMap(prisma.look.findMany(select)),
+    facetMap(prisma.color.findMany(select)),
+    facetMap(prisma.finish.findMany(select)),
+    facetMap(prisma.collection.findMany(select)),
+    facetMap(prisma.brand.findMany(select)),
+    facetMap(prisma.source.findMany(select)),
+    facetMap(prisma.application.findMany(select)),
+    facetMap(prisma.performanceAttribute.findMany(select)),
+  ]);
 
   // §8 step 3 — an unknown facet value at import is a hard failure.
-  const resolve = (map: Map<string, string>, facet: string, value: string | null, productId: string) => {
+  const resolve = (
+    map: Map<string, string>,
+    facet: string,
+    value: string | null,
+    productId: string,
+  ) => {
     if (!value) return null;
     const id = map.get(value);
     if (!id) throw new Error(`Unknown ${facet} value "${value}" on product ${productId}`);
@@ -154,7 +169,9 @@ export async function importProducts(): Promise<ProductsReport> {
     if (!ls) throw new Error(`Product ${p.id} missing from catalog-listing.json`);
     const sh = p.id.startsWith('AH') ? shopifyById.get(p.id.slice(2)) : undefined;
     if (p.id.startsWith('AH') && !sh) {
-      throw new Error(`Shopify record not found for ${p.id} (expected product_id ${p.id.slice(2)})`);
+      throw new Error(
+        `Shopify record not found for ${p.id} (expected product_id ${p.id.slice(2)})`,
+      );
     }
     if (sh) report.shopifyMatched += 1;
 
@@ -223,7 +240,9 @@ export async function importProducts(): Promise<ProductsReport> {
       weightLabel: trimmed(p.commerce?.weight) || null,
       isAvailable: ls.av !== false,
       supplierUrl: trimmed(p.url) || trimmed(sh?.product_url) || null,
-      legacyMeta: Object.keys(legacyMeta).length ? (legacyMeta as Prisma.InputJsonValue) : undefined,
+      legacyMeta: Object.keys(legacyMeta).length
+        ? (legacyMeta as Prisma.InputJsonValue)
+        : undefined,
     });
 
     // §8 step 4 — translation rows only where content exists; locales that

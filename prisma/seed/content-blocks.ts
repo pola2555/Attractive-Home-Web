@@ -60,7 +60,8 @@ const BLOCKS: BlockSeed[] = [
   },
   {
     key: 'contact.address',
-    notes: 'Displayed address on the contacts page (translatable; geo lives in settings contact.geo)',
+    notes:
+      'Displayed address on the contacts page (translatable; geo lives in settings contact.geo)',
     translations: {
       en: '79P6+86, Al Qusais, Al Nahda 1, Dubai, United Arab Emirates',
       ar: '79P6+86، القصيص، النهدة 1، دبي، الإمارات العربية المتحدة',

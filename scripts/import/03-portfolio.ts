@@ -116,7 +116,9 @@ export async function importPortfolio(): Promise<PortfolioReport> {
   const perCategoryOrder = new Map<string, number>();
 
   for (const entry of manifest.projects) {
-    const md = readJson<ProjectMeta>(`portfolio/projects/${entry.category}/${entry.id}/metadata.json`);
+    const md = readJson<ProjectMeta>(
+      `portfolio/projects/${entry.category}/${entry.id}/metadata.json`,
+    );
     const categoryId = categoryIdByKey.get(md.category);
     if (!categoryId) throw new Error(`Unknown portfolio category "${md.category}" on ${md.id}`);
 

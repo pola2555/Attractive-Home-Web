@@ -5,13 +5,29 @@ import type { PrismaClient } from '@prisma/client';
 // docs/DATABASE.md §4 — the nine seed permissions.
 const PERMISSIONS = [
   { slug: 'catalog.read', module: 'catalog', description: 'View catalog data in the dashboard' },
-  { slug: 'catalog.write', module: 'catalog', description: 'Create, edit and delete products and facet vocabularies' },
-  { slug: 'portfolio.write', module: 'portfolio', description: 'Create, edit and delete portfolio projects' },
-  { slug: 'content.write', module: 'content', description: 'Edit services, content blocks and sample rooms' },
+  {
+    slug: 'catalog.write',
+    module: 'catalog',
+    description: 'Create, edit and delete products and facet vocabularies',
+  },
+  {
+    slug: 'portfolio.write',
+    module: 'portfolio',
+    description: 'Create, edit and delete portfolio projects',
+  },
+  {
+    slug: 'content.write',
+    module: 'content',
+    description: 'Edit services, content blocks and sample rooms',
+  },
   { slug: 'leads.read', module: 'leads', description: 'View leads' },
   { slug: 'leads.write', module: 'leads', description: 'Update, assign and annotate leads' },
   { slug: 'settings.write', module: 'settings', description: 'Edit site settings' },
-  { slug: 'users.manage', module: 'users', description: 'Manage users, roles and permission overrides' },
+  {
+    slug: 'users.manage',
+    module: 'users',
+    description: 'Manage users, roles and permission overrides',
+  },
   { slug: 'audit.read', module: 'audit', description: 'View the audit log' },
 ] as const;
 

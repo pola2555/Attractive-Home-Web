@@ -37,7 +37,10 @@ const SETTINGS: { key: string; value: Prisma.InputJsonValue; description: string
       { platform: 'pinterest', url: 'https://pin.it/4dHNZjnCY' },
       { platform: 'facebook', url: 'https://www.facebook.com/attractive.home.interiors' },
       { platform: 'tiktok', url: 'https://www.tiktok.com/@attractivehome' },
-      { platform: 'linkedin', url: 'https://www.linkedin.com/company/attractive-home-interior-studio/' },
+      {
+        platform: 'linkedin',
+        url: 'https://www.linkedin.com/company/attractive-home-interior-studio/',
+      },
     ],
     description: 'Footer social links (display order preserved)',
   },

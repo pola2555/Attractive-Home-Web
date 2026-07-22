@@ -11,9 +11,11 @@ type ServicesI18n = { items: Record<string, { title?: string; description?: stri
 export type ServicesReport = { services: number; translations: number };
 
 export async function importServices(): Promise<ServicesReport> {
-  const servicesData = ((await import('./data/services/servicesData.js')) as {
-    default: ServiceEntry[];
-  }).default;
+  const servicesData = (
+    (await import('./data/services/servicesData.js')) as {
+      default: ServiceEntry[];
+    }
+  ).default;
   const i18n: Record<'en' | 'ar' | 'fr' | 'ru', ServicesI18n> = {
     en: readJson('services/services.en.json'),
     ar: readJson('services/services.ar.json'),
@@ -47,7 +49,11 @@ export async function importServices(): Promise<ServicesReport> {
       const title = trimmed(t?.title);
       if (!title) continue;
       // §3 — skip locales that merely duplicate the en content.
-      if (locale !== 'en' && title === trimmed(en.title) && trimmed(t?.description) === trimmed(en.description)) {
+      if (
+        locale !== 'en' &&
+        title === trimmed(en.title) &&
+        trimmed(t?.description) === trimmed(en.description)
+      ) {
         continue;
       }
       await prisma.serviceTranslation.upsert({
@@ -65,6 +71,8 @@ export async function importServices(): Promise<ServicesReport> {
     }
   }
 
-  console.log(`05-services: ${report.services} services, ${report.translations} translation rows ensured`);
+  console.log(
+    `05-services: ${report.services} services, ${report.translations} translation rows ensured`,
+  );
   return report;
 }

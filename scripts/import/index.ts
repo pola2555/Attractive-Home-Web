@@ -56,7 +56,9 @@ async function main() {
   const srcDesc = full.products.filter((p) => trimmed(p.desc?.en) || trimmed(p.desc?.ar)).length;
   const srcUse = full.products.filter((p) => trimmed(p.use?.en) || trimmed(p.use?.ar)).length;
   const srcFrRu = listing.products.filter(
-    (p) => (trimmed(p.tf) && trimmed(p.tf) !== trimmed(p.t)) || (trimmed(p.tr) && trimmed(p.tr) !== trimmed(p.t)),
+    (p) =>
+      (trimmed(p.tf) && trimmed(p.tf) !== trimmed(p.t)) ||
+      (trimmed(p.tr) && trimmed(p.tr) !== trimmed(p.t)),
   ).length;
   const srcImages = full.products.reduce((n, p) => n + (p.images?.length ?? 0), 0);
 
@@ -97,7 +99,9 @@ async function main() {
     products.slugSuffixed.length ? products.slugSuffixed.join(', ') : '(none)',
   );
   console.log(`  services translation rows: ${services.translations}`);
-  console.log(`\nDone in ${((Date.now() - started) / 1000).toFixed(1)}s — ${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`);
+  console.log(
+    `\nDone in ${((Date.now() - started) / 1000).toFixed(1)}s — ${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`,
+  );
   if (failures > 0) process.exitCode = 1;
 }
 
