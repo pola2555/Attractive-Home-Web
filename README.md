@@ -20,8 +20,8 @@ replacing the React SPA + S3-JSON architecture in the old repo (`done/6. Attract
 ## Status
 
 - [x] Database plan approved (2026-07-22)
-- [ ] Scaffold Next.js + Prisma (multi-file schema per docs/DATABASE.md §9)
-- [ ] First migration + seed (locales, RBAC, settings)
+- [x] Scaffold Next.js + Prisma (multi-file schema per docs/DATABASE.md §9)
+- [x] First migration + seed (locales, RBAC, settings)
 - [ ] Import scripts (docs/DATABASE.md §8 — copy source data from the old repo at import time)
 - [ ] App phases (routing/i18n, catalog, portfolio, dashboard, SEO wiring)
 
