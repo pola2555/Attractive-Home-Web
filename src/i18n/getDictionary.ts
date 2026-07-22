@@ -21,14 +21,26 @@ export async function getDictionary(locale: Locale, namespace: Namespace): Promi
 
 // Resolve a dotted path ("nav.about") in a dictionary; falls back to the last
 // path segment so a missing key renders as readable text, never crashes.
-export function t(dict: Dictionary, path: string): string {
+// Supports the old i18next-style {{var}} interpolation.
+export function t(
+  dict: Dictionary,
+  path: string,
+  vars?: Record<string, string | number>,
+): string {
   let node: unknown = dict;
   for (const part of path.split('.')) {
     if (node && typeof node === 'object' && part in (node as Record<string, unknown>)) {
       node = (node as Record<string, unknown>)[part];
     } else {
-      return path.split('.').pop() as string;
+      node = undefined;
+      break;
     }
   }
-  return typeof node === 'string' ? node : (path.split('.').pop() as string);
+  let text = typeof node === 'string' ? node : (path.split('.').pop() as string);
+  if (vars) {
+    for (const [key, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{{${key}}}`, String(value));
+    }
+  }
+  return text;
 }
