@@ -1,0 +1,144 @@
+// docs/DATABASE.md §6 — module: portfolio.
+// Categories → projects → sections → media. The old `sections[].keys[]`
+// mapping becomes the `section_id` FK (at-most-one-section is structural);
+// `hasSections`/`materialized` flags are gone — derivable.
+
+model PortfolioCategory {
+  id          String   @id @db.Uuid
+  legacyKey   String?  @unique @map("legacy_key") // 'architectural' | 'interior' | 'fit'
+  slug        String   @unique
+  sortOrder   Int      @default(0) @map("sort_order")
+  isPublished Boolean  @default(true) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations PortfolioCategoryTranslation[]
+  projects     Project[]
+
+  @@map("portfolio_categories")
+}
+
+model PortfolioCategoryTranslation {
+  id                  String  @id @db.Uuid
+  portfolioCategoryId String  @map("portfolio_category_id") @db.Uuid
+  localeCode          String  @map("locale_code") @db.VarChar(8)
+  title               String
+  description         String?
+  metaTitle           String? @map("meta_title")
+  metaDescription     String? @map("meta_description")
+
+  portfolioCategory PortfolioCategory @relation(fields: [portfolioCategoryId], references: [id], onDelete: Cascade)
+  locale            Locale            @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([portfolioCategoryId, localeCode])
+  @@index([localeCode])
+  @@map("portfolio_category_translations")
+}
+
+model Project {
+  id          String     @id @db.Uuid
+  legacyId    String     @unique @map("legacy_id") // 'project-<ms>'
+  categoryId  String     @map("category_id") @db.Uuid
+  slug        String     @unique
+  coverKey    String?    @map("cover_key") // relative S3 key: '…/cover/master.m3u8' or 'cover.webp'
+  coverType   MediaType? @map("cover_type")
+  latitude    Decimal?   @db.Decimal(9, 6) // start NULL — today's map pins are FAKE; map hides NULLs
+  longitude   Decimal?   @db.Decimal(9, 6)
+  sortOrder   Int        @default(0) @map("sort_order") // display order within category
+  isPublished Boolean    @default(true) @map("is_published")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6) // seeded from metadata.json
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category PortfolioCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  translations ProjectTranslation[]
+  sections     ProjectSection[]
+  media        ProjectMedia[]
+  leads        Lead[]
+
+  @@index([categoryId, sortOrder])
+  @@map("projects")
+}
+
+model ProjectTranslation {
+  id              String  @id @db.Uuid
+  projectId       String  @map("project_id") @db.Uuid
+  localeCode      String  @map("locale_code") @db.VarChar(8)
+  title           String
+  areaLabel       String? @map("area_label") // '500 m²'
+  description     String?
+  metaTitle       String? @map("meta_title")
+  metaDescription String? @map("meta_description")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  locale  Locale  @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([projectId, localeCode])
+  @@index([localeCode])
+  @@map("project_translations")
+}
+
+model ProjectSection {
+  id        String  @id @db.Uuid
+  projectId String  @map("project_id") @db.Uuid
+  legacyId  String? @unique @map("legacy_id") // 'sec_<b36>_<rand>'
+  sortOrder Int     @default(0) @map("sort_order")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  translations ProjectSectionTranslation[]
+  media        ProjectMedia[]
+
+  @@index([projectId, sortOrder])
+  @@map("project_sections")
+}
+
+model ProjectSectionTranslation {
+  id               String @id @db.Uuid
+  projectSectionId String @map("project_section_id") @db.Uuid
+  localeCode       String @map("locale_code") @db.VarChar(8)
+  name             String
+
+  projectSection ProjectSection @relation(fields: [projectSectionId], references: [id], onDelete: Cascade)
+  locale         Locale         @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([projectSectionId, localeCode])
+  @@index([localeCode])
+  @@map("project_section_translations")
+}
+
+model ProjectMedia {
+  id        String    @id @db.Uuid
+  projectId String    @map("project_id") @db.Uuid
+  sectionId String?   @map("section_id") @db.Uuid // NULL = 'Other' tab
+  mediaType MediaType @map("media_type")
+  baseKey   String    @map("base_key") // 'media_<b36>_<rand5>' stem
+  s3Key     String    @map("s3_key")
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  section ProjectSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  translations ProjectMediaTranslation[]
+
+  @@unique([projectId, baseKey])
+  @@index([projectId, sortOrder])
+  @@index([sectionId])
+  @@map("project_media")
+}
+
+model ProjectMediaTranslation {
+  id             String  @id @db.Uuid
+  projectMediaId String  @map("project_media_id") @db.Uuid
+  localeCode     String  @map("locale_code") @db.VarChar(8)
+  alt            String? // seeded empty; per-media alt is an SEO goal, feasible at 41 projects
+  caption        String?
+
+  projectMedia ProjectMedia @relation(fields: [projectMediaId], references: [id], onDelete: Cascade)
+  locale       Locale       @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([projectMediaId, localeCode])
+  @@index([localeCode])
+  @@map("project_media_translations")
+}

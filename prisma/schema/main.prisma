@@ -1,0 +1,97 @@
+// docs/DATABASE.md §9 — multi-file Prisma schema.
+// This file: datasource, generator, the ONLY five enums (§1), and the shared
+// `locales` table (§3) referenced by every *_translations table.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
+}
+
+// ---------------------------------------------------------------------------
+// Enums — docs/DATABASE.md §1: value set bounded AND code-driven → enum.
+// Everything admins might extend (facets, brands, collections, locales,
+// roles, permissions) is a lookup table instead.
+// ---------------------------------------------------------------------------
+
+enum MediaType {
+  image
+  video
+
+  @@map("media_type")
+}
+
+enum PermissionEffect {
+  allow
+  deny
+
+  @@map("permission_effect")
+}
+
+enum LeadStatus {
+  new
+  contacted
+  closed
+
+  @@map("lead_status")
+}
+
+enum LeadChannel {
+  contact_form
+  whatsapp
+  visualizer
+  other
+
+  @@map("lead_channel")
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+  login
+  import
+
+  @@map("audit_action")
+}
+
+// ---------------------------------------------------------------------------
+// Locales — docs/DATABASE.md §3. Natural PK (code); adding a language is one
+// row, zero schema change. `zh` is the non-public Chinese source language.
+// ---------------------------------------------------------------------------
+
+model Locale {
+  code       String  @id @db.VarChar(8)
+  nameEn     String  @map("name_en")
+  nativeName String  @map("native_name")
+  isRtl      Boolean @default(false) @map("is_rtl")
+  isPublic   Boolean @default(true) @map("is_public")
+  isDefault  Boolean @default(false) @map("is_default")
+  sortOrder  Int     @map("sort_order")
+
+  productTypeTranslations          ProductTypeTranslation[]
+  materialTranslations             MaterialTranslation[]
+  lookTranslations                 LookTranslation[]
+  colorTranslations                ColorTranslation[]
+  applicationTranslations          ApplicationTranslation[]
+  finishTranslations               FinishTranslation[]
+  performanceAttributeTranslations PerformanceAttributeTranslation[]
+  collectionTranslations           CollectionTranslation[]
+  brandTranslations                BrandTranslation[]
+  sourceTranslations               SourceTranslation[]
+  productTranslations              ProductTranslation[]
+  portfolioCategoryTranslations    PortfolioCategoryTranslation[]
+  projectTranslations              ProjectTranslation[]
+  projectSectionTranslations       ProjectSectionTranslation[]
+  projectMediaTranslations         ProjectMediaTranslation[]
+  serviceTranslations              ServiceTranslation[]
+  contentBlockTranslations         ContentBlockTranslation[]
+  leads                            Lead[]
+
+  @@map("locales")
+}

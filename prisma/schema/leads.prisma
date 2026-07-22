@@ -1,0 +1,48 @@
+// docs/DATABASE.md §7 — module: leads.
+// Leads are stored in the DB first; SES email is only a notification, so an
+// email failure no longer loses the lead.
+//
+// Hand-added SQL in migration 1 (Prisma can't express it — §7):
+//   PARTIAL index (status, created_at DESC) WHERE status <> 'closed'
+
+model Lead {
+  id         String      @id @db.Uuid
+  name       String
+  phone      String // E.164 as submitted
+  email      String? // form captures only name+phone today; ready for more
+  message    String?
+  channel    LeadChannel @default(contact_form)
+  sourcePath String?     @map("source_path")
+  localeCode String?     @map("locale_code") @db.VarChar(8)
+  productId  String?     @map("product_id") @db.Uuid
+  projectId  String?     @map("project_id") @db.Uuid
+  status     LeadStatus  @default(new)
+  assignedTo String?     @map("assigned_to") @db.Uuid
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  locale   Locale?  @relation(fields: [localeCode], references: [code], onDelete: SetNull)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  assignee User?    @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+
+  notes LeadNote[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([assignedTo])
+  @@map("leads")
+}
+
+model LeadNote {
+  id        String   @id @db.Uuid
+  leadId    String   @map("lead_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt])
+  @@map("lead_notes")
+}

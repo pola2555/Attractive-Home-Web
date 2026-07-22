@@ -1,0 +1,89 @@
+// docs/DATABASE.md §7 — module: content.
+// services, admin-editable marketing atoms (content_blocks), visualizer sample
+// rooms, and the settings KV store. All UI chrome strings stay in code i18n
+// files — content_blocks holds ONLY admin-editable marketing copy.
+
+model Service {
+  id          String     @id @db.Uuid
+  legacyKey   String?    @unique @map("legacy_key") // 'constructionManagement', …
+  slug        String     @unique
+  mediaType   MediaType? @map("media_type")
+  mediaKey    String?    @map("media_key")
+  sortOrder   Int        @default(0) @map("sort_order")
+  isPublished Boolean    @default(true) @map("is_published")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations ServiceTranslation[]
+
+  @@map("services")
+}
+
+model ServiceTranslation {
+  id              String  @id @db.Uuid
+  serviceId       String  @map("service_id") @db.Uuid
+  localeCode      String  @map("locale_code") @db.VarChar(8)
+  title           String
+  description     String?
+  metaTitle       String? @map("meta_title")
+  metaDescription String? @map("meta_description")
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  locale  Locale  @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([serviceId, localeCode])
+  @@index([localeCode])
+  @@map("service_translations")
+}
+
+model ContentBlock {
+  id        String   @id @db.Uuid
+  key       String   @unique // 'home.stats.projects' | 'about.body' | 'contact.address' | …
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations ContentBlockTranslation[]
+
+  @@map("content_blocks")
+}
+
+model ContentBlockTranslation {
+  id             String @id @db.Uuid
+  contentBlockId String @map("content_block_id") @db.Uuid
+  localeCode     String @map("locale_code") @db.VarChar(8)
+  body           String
+
+  contentBlock ContentBlock @relation(fields: [contentBlockId], references: [id], onDelete: Cascade)
+  locale       Locale       @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([contentBlockId, localeCode])
+  @@index([localeCode])
+  @@map("content_block_translations")
+}
+
+model SampleRoom {
+  id          String   @id @db.Uuid
+  imageKey    String   @map("image_key")
+  sortOrder   Int      @default(0) @map("sort_order")
+  isPublished Boolean  @default(true) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("sample_rooms")
+}
+
+// KV + JSONB, validated by zod schemas per key in app code. KV chosen over a
+// structured singleton: ~10 heterogeneous values read as one blob, edited on
+// one screen; a new social network = a row, not a migration.
+model Setting {
+  key         String   @id // 'contact.phones', 'contact.email', 'contact.whatsapp', 'contact.geo', 'social.links', 'leads.notify_emails'
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy   String?  @map("updated_by") @db.Uuid
+
+  updatedByUser User? @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@map("settings")
+}

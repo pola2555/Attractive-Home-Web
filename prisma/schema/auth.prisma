@@ -1,0 +1,101 @@
+// docs/DATABASE.md §4 — module: auth.
+// Full RBAC: users, roles, permissions, role grants, per-user allow/deny
+// overrides. Effective permission = deny override > allow override > union of
+// role permissions (resolved by one shared helper in app code).
+// Sessions are Auth.js JWT (no accounts/sessions tables); `security_stamp`
+// rotates on password change/deactivation to invalidate outstanding JWTs.
+
+model User {
+  id            String    @id @db.Uuid
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz(6)
+  securityStamp String    @map("security_stamp") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  userRoles           UserRole[]
+  permissionOverrides UserPermissionOverride[]
+  passwordResetTokens PasswordResetToken[]
+  assignedLeads       Lead[]
+  leadNotes           LeadNote[]
+  auditEntries        AuditLog[]
+  settingsUpdated     Setting[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String  @id @db.Uuid
+  slug        String  @unique // 'admin' | 'data-entry' | …
+  name        String
+  description String?
+  isSystem    Boolean @default(false) @map("is_system")
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @db.Uuid
+  slug        String  @unique // 'catalog.write', …
+  module      String // 'catalog', 'portfolio', …
+  description String?
+
+  rolePermissions RolePermission[]
+  userOverrides   UserPermissionOverride[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model UserPermissionOverride {
+  userId       String           @map("user_id") @db.Uuid
+  permissionId String           @map("permission_id") @db.Uuid
+  effect       PermissionEffect
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionId])
+  @@map("user_permission_overrides")
+}
+
+model PasswordResetToken {
+  id        String    @id @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") // SHA-256 of the token, never the raw value
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}

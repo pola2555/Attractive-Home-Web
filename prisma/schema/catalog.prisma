@@ -1,0 +1,413 @@
+// docs/DATABASE.md §5 — module: catalog.
+// Ten facet lookup tables in one identical shape (id, code UNIQUE, sort_order,
+// is_active, timestamps + companion *_translations). Their seeds replace
+// catalogTerms.js entirely. Generic EAV was deliberately rejected (§10).
+//
+// Hand-added SQL in migration 1 (Prisma can't express it — §1/§5):
+//   GIN (products.code gin_trgm_ops)
+//   GIN (product_translations.name gin_trgm_ops)
+//   PARTIAL index on products.featured_rank WHERE featured_rank IS NOT NULL
+
+// ---------------------------------------------------------------------------
+// Facet lookups
+// ---------------------------------------------------------------------------
+
+model ProductType {
+  id        String   @id @db.Uuid
+  code      String   @unique // canonical EN value
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations ProductTypeTranslation[]
+  products     Product[]
+
+  @@map("product_types")
+}
+
+model ProductTypeTranslation {
+  id            String @id @db.Uuid
+  productTypeId String @map("product_type_id") @db.Uuid
+  localeCode    String @map("locale_code") @db.VarChar(8)
+  name          String
+
+  productType ProductType @relation(fields: [productTypeId], references: [id], onDelete: Cascade)
+  locale      Locale      @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([productTypeId, localeCode])
+  @@index([localeCode])
+  @@map("product_type_translations")
+}
+
+model Material {
+  id        String   @id @db.Uuid
+  code      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations MaterialTranslation[]
+  products     Product[]
+
+  @@map("materials")
+}
+
+model MaterialTranslation {
+  id         String @id @db.Uuid
+  materialId String @map("material_id") @db.Uuid
+  localeCode String @map("locale_code") @db.VarChar(8)
+  name       String
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  locale   Locale   @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([materialId, localeCode])
+  @@index([localeCode])
+  @@map("material_translations")
+}
+
+model Look {
+  id        String   @id @db.Uuid
+  code      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations LookTranslation[]
+  products     Product[]
+
+  @@map("looks")
+}
+
+model LookTranslation {
+  id         String @id @db.Uuid
+  lookId     String @map("look_id") @db.Uuid
+  localeCode String @map("locale_code") @db.VarChar(8)
+  name       String
+
+  look   Look   @relation(fields: [lookId], references: [id], onDelete: Cascade)
+  locale Locale @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([lookId, localeCode])
+  @@index([localeCode])
+  @@map("look_translations")
+}
+
+model Color {
+  id        String   @id @db.Uuid
+  code      String   @unique
+  hex       String?  @db.Char(7) // from catalog-listing.json meta.colorHex
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations ColorTranslation[]
+  products     Product[]
+
+  @@map("colors")
+}
+
+model ColorTranslation {
+  id         String @id @db.Uuid
+  colorId    String @map("color_id") @db.Uuid
+  localeCode String @map("locale_code") @db.VarChar(8)
+  name       String
+
+  color  Color  @relation(fields: [colorId], references: [id], onDelete: Cascade)
+  locale Locale @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([colorId, localeCode])
+  @@index([localeCode])
+  @@map("color_translations")
+}
+
+model Application {
+  id        String   @id @db.Uuid
+  code      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations ApplicationTranslation[]
+  products     ProductApplication[]
+
+  @@map("applications")
+}
+
+model ApplicationTranslation {
+  id            String @id @db.Uuid
+  applicationId String @map("application_id") @db.Uuid
+  localeCode    String @map("locale_code") @db.VarChar(8)
+  name          String
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  locale      Locale      @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([applicationId, localeCode])
+  @@index([localeCode])
+  @@map("application_translations")
+}
+
+model Finish {
+  id        String   @id @db.Uuid
+  code      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations FinishTranslation[]
+  products     Product[]
+
+  @@map("finishes")
+}
+
+model FinishTranslation {
+  id         String @id @db.Uuid
+  finishId   String @map("finish_id") @db.Uuid
+  localeCode String @map("locale_code") @db.VarChar(8)
+  name       String
+
+  finish Finish @relation(fields: [finishId], references: [id], onDelete: Cascade)
+  locale Locale @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([finishId, localeCode])
+  @@index([localeCode])
+  @@map("finish_translations")
+}
+
+model PerformanceAttribute {
+  id        String   @id @db.Uuid
+  code      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations PerformanceAttributeTranslation[]
+  products     ProductPerformance[]
+
+  @@map("performance_attributes")
+}
+
+model PerformanceAttributeTranslation {
+  id                     String @id @db.Uuid
+  performanceAttributeId String @map("performance_attribute_id") @db.Uuid
+  localeCode             String @map("locale_code") @db.VarChar(8)
+  name                   String
+
+  performanceAttribute PerformanceAttribute @relation(fields: [performanceAttributeId], references: [id], onDelete: Cascade)
+  locale               Locale               @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([performanceAttributeId, localeCode])
+  @@index([localeCode])
+  @@map("performance_attribute_translations")
+}
+
+model Collection {
+  id        String   @id @db.Uuid
+  code      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations CollectionTranslation[]
+  products     Product[]
+
+  @@map("collections")
+}
+
+model CollectionTranslation {
+  id           String @id @db.Uuid
+  collectionId String @map("collection_id") @db.Uuid
+  localeCode   String @map("locale_code") @db.VarChar(8)
+  name         String
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  locale     Locale     @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([collectionId, localeCode])
+  @@index([localeCode])
+  @@map("collection_translations")
+}
+
+model Brand {
+  id        String   @id @db.Uuid
+  code      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations BrandTranslation[]
+  products     Product[]
+
+  @@map("brands")
+}
+
+model BrandTranslation {
+  id         String @id @db.Uuid
+  brandId    String @map("brand_id") @db.Uuid
+  localeCode String @map("locale_code") @db.VarChar(8)
+  name       String
+
+  brand  Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  locale Locale @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([brandId, localeCode])
+  @@index([localeCode])
+  @@map("brand_translations")
+}
+
+model Source {
+  id        String   @id @db.Uuid
+  code      String   @unique // 'catalog' | 'attractivehome'
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations SourceTranslation[]
+  products     Product[]
+
+  @@map("sources")
+}
+
+model SourceTranslation {
+  id         String @id @db.Uuid
+  sourceId   String @map("source_id") @db.Uuid
+  localeCode String @map("locale_code") @db.VarChar(8)
+  name       String
+
+  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  locale Locale @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([sourceId, localeCode])
+  @@index([localeCode])
+  @@map("source_translations")
+}
+
+// ---------------------------------------------------------------------------
+// Products
+// ---------------------------------------------------------------------------
+
+model Product {
+  id               String  @id @db.Uuid
+  legacyId         String  @unique @map("legacy_id") // 'P00501'
+  shopifyProductId BigInt? @unique @map("shopify_product_id")
+  slug             String  @unique // §8 step 5
+  sourceId         String  @map("source_id") @db.Uuid
+  brandId          String? @map("brand_id") @db.Uuid
+  code             String? // supplier SKU; NOT unique
+  typeId           String? @map("type_id") @db.Uuid
+  materialId       String? @map("material_id") @db.Uuid
+  lookId           String? @map("look_id") @db.Uuid
+  colorId          String? @map("color_id") @db.Uuid
+  finishId         String? @map("finish_id") @db.Uuid
+  collectionId     String? @map("collection_id") @db.Uuid
+  sizeLabel        String? @map("size_label") // free text '750×1500 mm' — NOT a lookup
+  price            Decimal @default(0) @db.Decimal(12, 2)
+  currency         String  @default("AED") @db.Char(3)
+  priceUnit        String? @map("price_unit") // vocabulary is an OPEN DECISION (README)
+  sellingType      String? @map("selling_type")
+  packing          String?
+  weightLabel      String? @map("weight_label")
+  isAvailable      Boolean @default(true) @map("is_available")
+  isPublished      Boolean @default(true) @map("is_published")
+  featuredRank     Int?    @map("featured_rank")
+  supplierUrl      String? @map("supplier_url")
+  legacyMeta       Json?   @map("legacy_meta") // Shopify leftovers: tags[], description_paragraphs, filter_*
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  source     Source       @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  brand      Brand?       @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  type       ProductType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  material   Material?    @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  look       Look?        @relation(fields: [lookId], references: [id], onDelete: SetNull)
+  color      Color?       @relation(fields: [colorId], references: [id], onDelete: SetNull)
+  finish     Finish?      @relation(fields: [finishId], references: [id], onDelete: SetNull)
+  collection Collection?  @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+
+  translations ProductTranslation[]
+  applications ProductApplication[]
+  performance  ProductPerformance[]
+  images       ProductImage[]
+  leads        Lead[]
+
+  @@index([sourceId])
+  @@index([brandId])
+  @@index([typeId])
+  @@index([materialId])
+  @@index([lookId])
+  @@index([colorId])
+  @@index([finishId])
+  @@index([collectionId])
+  @@index([isPublished, typeId])
+  @@map("products")
+}
+
+model ProductTranslation {
+  id              String  @id @db.Uuid
+  productId       String  @map("product_id") @db.Uuid
+  localeCode      String  @map("locale_code") @db.VarChar(8)
+  name            String
+  description     String?
+  usageNotes      String? @map("usage_notes")
+  metaTitle       String? @map("meta_title")
+  metaDescription String? @map("meta_description")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  locale  Locale  @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([productId, localeCode])
+  @@index([localeCode])
+  @@map("product_translations")
+}
+
+model ProductApplication {
+  productId     String @map("product_id") @db.Uuid
+  applicationId String @map("application_id") @db.Uuid
+
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@id([productId, applicationId])
+  @@index([applicationId])
+  @@map("product_applications")
+}
+
+model ProductPerformance {
+  productId              String @map("product_id") @db.Uuid
+  performanceAttributeId String @map("performance_attribute_id") @db.Uuid
+
+  product              Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  performanceAttribute PerformanceAttribute @relation(fields: [performanceAttributeId], references: [id], onDelete: Restrict)
+
+  @@id([productId, performanceAttributeId])
+  @@index([performanceAttributeId])
+  @@map("product_performance")
+}
+
+model ProductImage {
+  id          String  @id @db.Uuid
+  productId   String  @map("product_id") @db.Uuid
+  sortOrder   Int     @map("sort_order") // 0 = primary
+  s3Key       String  @map("s3_key") // '{n}-display.webp'
+  thumbKey    String? @map("thumb_key") // '0-thumb.webp'
+  supplierUrl String? @map("supplier_url") // fallback CDN
+  width       Int?
+  height      Int?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, sortOrder])
+  @@map("product_images")
+}

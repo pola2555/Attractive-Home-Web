@@ -1,0 +1,21 @@
+// docs/DATABASE.md §7 — module: system.
+// audit_log is append-only and polymorphic BY DESIGN: no FK on entity_id, so
+// entries survive entity deletion. Written by a single writeAudit() helper
+// called from every admin mutation. UUID v7 PK = chronological.
+
+model AuditLog {
+  id         String      @id @db.Uuid
+  userId     String?     @map("user_id") @db.Uuid // NULL = system/import
+  entityType String      @map("entity_type")
+  entityId   String      @map("entity_id")
+  action     AuditAction
+  diff       Json? // {field: {from, to}}
+  ip         String?     @db.Inet
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("audit_log")
+}
