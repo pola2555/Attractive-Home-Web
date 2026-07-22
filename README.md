@@ -24,7 +24,19 @@ replacing the React SPA + S3-JSON architecture in the old repo (`done/6. Attract
 - [x] First migration + seed (locales, RBAC, settings)
 - [x] Import scripts (docs/DATABASE.md §8 — dev run against old-repo copies; cutover re-runs
       them against fresh S3 exports + the live-S3 vs repo `products.json` diff described in §8)
-- [ ] App phases (routing/i18n, catalog, portfolio, dashboard, SEO wiring)
+- [x] App phases (routing/i18n, catalog, portfolio, dashboard, SEO wiring)
+
+## App structure
+
+Public site is under `src/app/[locale]/` (en/ar/fr/ru; `src/proxy.ts` redirects un-prefixed
+URLs to the visitor's language). Pages: home, about, services, contacts (lead-storing form),
+catalog + `/products/[slug]`, portfolio + `/portfolio/[category]/[slug]` (301s from old
+legacy-id URLs). SEO: per-page metadata + hreflang, `sitemap.xml` (all products/projects),
+`robots.txt`, Organization + Product JSON-LD, optional GA4.
+
+Admin dashboard is at `/dashboard` (English-only, `noindex`, outside the locale tree):
+Auth.js v5 credentials login, leads inbox with status/assignment/notes, and product price
+entry. RBAC via `requirePermission()`; every mutation writes an `audit_log` row.
 
 **Open decisions before data entry starts:** price unit vocabulary (per m² / box / piece);
 first admin email + individual accounts per team member.
