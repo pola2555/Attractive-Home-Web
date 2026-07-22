@@ -35,6 +35,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip Next internals, API routes and static files (anything with a dot).
-  matcher: ['/((?!_next|api|.*\\..*).*)'],
+  // Skip Next internals, API routes, the (English-only) dashboard and static
+  // files (anything with a dot).
+  matcher: ['/((?!_next|api|dashboard|.*\\..*).*)'],
 };
