@@ -1,0 +1,41 @@
+{
+  "documentTitle": "Attractive Home | Architecture, Interior Design & Fit-Out Company in UAE",
+  "nav": {
+    "about": "ABOUT",
+    "portfolio": "PORTFOLIO",
+    "catalog": "CATALOG",
+    "visualizer": "VISUALIZER",
+    "contacts": "CONTACTS",
+    "services": "SERVICES"
+  },
+  "language": {
+    "switchToArabic": "العربية",
+    "switchToEnglish": "EN",
+    "label": "Language",
+    "en": "English",
+    "ar": "العربية",
+    "fr": "Français",
+    "ru": "Русский"
+  },
+  "footer": {
+    "aboutUs": "About Us",
+    "contacts": "Contacts",
+    "services": "Services",
+    "portfolio": "Portfolio",
+    "architectural": "Architectural Design",
+    "interior": "Interior Design",
+    "fitOut": "Fit-Out Interiors",
+    "companyName": "Attractive Home",
+    "rights": "© 2013 — 2026 Attractive Home. All Rights Reserved."
+  },
+  "notFound": {
+    "message": "Oops! The page you're looking for doesn't exist.",
+    "goHome": "Go Home"
+  },
+  "logout": "LOGOUT",
+  "whatsapp": "Chat with us on WhatsApp",
+  "theme": {
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode"
+  }
+}

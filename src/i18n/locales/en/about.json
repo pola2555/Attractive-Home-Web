@@ -1,0 +1,15 @@
+{
+  "whoWeAre": "Who We Are",
+  "aboutUs": "About Us",
+  "intro": "Since 2013, <1>Attractive Home</1> has been bringing creative architectural, interior, and fit-out solutions that combine elegance, functionality, and artistry. We transform spaces into personalized expressions of style and comfort.",
+  "company": "Attractive Home",
+  "pillars": {
+    "architectural": "Architectural",
+    "interior": "Interior",
+    "fitOut": "Fit-Out"
+  },
+  "viewPortfolio": "View {{label}} portfolio projects",
+  "mapTitle": "Over 100 Projects Across Dubai",
+  "mapSubtitle": "Explore our portfolio on the map from architectural and interior design to fit-out. Click a marker to view the project.",
+  "viewProject": "View Project"
+}

@@ -1,0 +1,22 @@
+{
+  "headline": "NOUS VOUS RAPPELLERONS, RÉPONDRONS À VOS QUESTIONS ET TROUVERONS LA SOLUTION À TOUTE DEMANDE",
+  "subtext": "Discuter du projet ne vous engage à rien : nous vous parlerons de nous et des options pour concrétiser vos idées, et vous déciderez d'une éventuelle collaboration.",
+  "thankYou": "Merci !",
+  "thankYouSub": "Nous avons bien reçu votre demande et vous rappellerons bientôt.",
+  "sendAnother": "Envoyer un autre",
+  "nameLabel": "Saisissez votre nom*",
+  "namePlaceholder": "Votre nom",
+  "phoneLabel": "Numéro de téléphone",
+  "phonePlaceholder": "Votre numéro de téléphone",
+  "errorRequired": "Veuillez saisir votre nom ou votre numéro de téléphone.",
+  "errorGeneric": "Une erreur s'est produite. Veuillez réessayer plus tard.",
+  "sending": "ENVOI EN COURS...",
+  "send": "ENVOYER",
+  "notProvided": "(non fourni)",
+  "contactInfo": "Coordonnées",
+  "orderProject": "COMMANDER UN PROJET",
+  "dubai": "DUBAÏ",
+  "address": "79P6+86, Al Qusais, Al Nahda 1, Dubaï, Émirats arabes unis",
+  "mapName": "Attractive Home",
+  "mapAddress": "Al Qusais, Al Nahda 1, Dubaï"
+}

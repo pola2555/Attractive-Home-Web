@@ -1,0 +1,60 @@
+{
+  "title": "PORTFOLIO",
+  "categories": {
+    "architectural": {
+      "title": "Architectural Design",
+      "description": "Attractive Home changes the idea of what a space for living should look like. Our architecture pushes the boundaries of the four walls and turns a country residence into a holiday and adventure. We use landscape, climate, and terrain data 100% and even more to exceed expectations and make your dreams come true."
+    },
+    "interior": {
+      "title": "Interior Design",
+      "description": "Crafting stylish and comfortable spaces that reflect our clients' unique tastes and lifestyles. Our focus is on creating environments that are not only visually stunning but also practical and welcoming."
+    },
+    "fit": {
+      "title": "Fit-Out Interiors",
+      "description": "Delivering tailored and efficient interior solutions for businesses. Our fit-out designs prioritize functionality and aesthetics, ensuring spaces align with productivity needs and brand identity."
+    }
+  },
+  "objectsCount": "More than 140 objects ranging from 120 to 8000 m²",
+  "mapTitle": "Projects Map",
+  "mapSubtitle": "Our completed projects across Dubai. Click a marker to open the project page.",
+  "viewOnMap": "View projects on map",
+  "viewCategory": "View projects for {{title}}",
+  "pioneer": "Pioneer",
+  "exploreAluminum": "Explore Aluminum Skirting",
+  "aluminumProfiles": "Aluminum Skirting Profiles",
+  "exploreMore": "Explore More",
+  "categoryNotFound": "Category not found!",
+  "backToPortfolio": "Back to Portfolio",
+  "projectNotFound": "Project not found!",
+  "loadingProject": "Loading project...",
+  "showFolder": "Show {{folder}}",
+  "hideFolder": "Hide {{folder}}",
+  "sectionOther": "Gallery",
+  "sectionsLabel": "Project sections",
+  "aluminum": {
+    "heroTitle": "Transformative Aluminum Skirting Profiles",
+    "heroSubtitle": "Elevate your space with sleek, modern aluminum profiles that blend functionality and style.",
+    "discover": "Discover",
+    "premiumTitle": "Premium Aluminum Skirting Profiles",
+    "premiumSubtitle": "Experience sleek and modern profiles that enhance the aesthetic of any space.",
+    "feature1Title": "Modern Touch Neat Finish Sleek Design",
+    "feature1Text": "Discover the transformative power of our premium aluminum skirting profiles for any space.",
+    "feature2Title": "Flawless Look Functionality Style Clean",
+    "feature2Text": "Enhance every corner with impeccable clean and sophisticated aluminum skirting profiles.",
+    "feature3Title": "Residential Commercial Setting Attention Detail Precision Design",
+    "feature3Text": "Transform your space with attention to detail and precision in our sleek profiles.",
+    "sleekTitle": "Sleek Profiles",
+    "sleekSubtitle": "Transformative power, clean lines, modern touch, flawless look, impeccable clean",
+    "att001Name": "Aluminum Profile ATT-001",
+    "att001Desc": "Durable, stylish, versatile aluminum profile for projects.",
+    "att001Tag": "Plastered Walls Profile",
+    "att001Heading": "ATT-001 - Precision for Plastered Walls",
+    "att001Body": "Designed for <strong>plastered walls</strong>, the <strong>ATT-001</strong> aluminum profile seamlessly creates a <strong>2 cm shadow gap</strong> between the walls and flooring, adding a sleek and modern aesthetic. This profile has been successfully applied in numerous projects, offering durability and precision. To ensure optimal performance, it should be installed following the provided installation guide. <strong>ATT-001</strong> enhances the transition between surfaces, making it an ideal choice for architects and designers aiming for a refined, seamless look.",
+    "att002Name": "Aluminum Profile ATT-002",
+    "att002Tag": "Wall Claddings Profile",
+    "att002Heading": "ATT-002 - Perfect for Claddings (All types)",
+    "att002Body": "Complementing <strong>ATT-001</strong>, the <strong>ATT-002</strong> aluminum profile is designed for <strong>wood and marble claddings.</strong> It also creates a <strong>2 cm shadow gap</strong>, ensuring a cohesive and sophisticated finish across different surfaces. Whether used in wall paneling or decorative cladding, <strong>ATT-002</strong> maintains a consistent design language, making it an essential component for high-end interior and architectural detailing. Together, <strong>ATT-001</strong> and <strong>ATT-002</strong> provide a complete solution for achieving clean lines and contemporary elegance.",
+    "dimensions": "Dimensions",
+    "technicalGuide": "Technical Guide"
+  }
+}

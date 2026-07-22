@@ -1,0 +1,60 @@
+{
+  "title": "PORTFOLIO",
+  "categories": {
+    "architectural": {
+      "title": "Conception architecturale",
+      "description": "Attractive Home renouvelle l'idée de ce à quoi devrait ressembler un espace de vie. Notre architecture repousse les limites des quatre murs et transforme une résidence de campagne en un lieu de vacances et d'aventure. Nous exploitons pleinement les données de paysage, de climat et de terrain, et bien davantage, pour dépasser les attentes et réaliser vos rêves."
+    },
+    "interior": {
+      "title": "Design d'intérieur",
+      "description": "Créer des espaces élégants et confortables qui reflètent les goûts et les modes de vie uniques de nos clients. Nous nous attachons à concevoir des environnements aussi séduisants sur le plan visuel que pratiques et accueillants."
+    },
+    "fit": {
+      "title": "Aménagement intérieur",
+      "description": "Offrir des solutions intérieures sur mesure et efficaces pour les entreprises. Nos aménagements privilégient la fonctionnalité et l'esthétique, en veillant à ce que les espaces répondent aux besoins de productivité et à l'identité de marque."
+    }
+  },
+  "objectsCount": "Plus de 140 réalisations, de 120 à 8000 m²",
+  "mapTitle": "Carte des projets",
+  "mapSubtitle": "Nos projets réalisés à travers Dubaï. Cliquez sur un repère pour ouvrir la page du projet.",
+  "viewOnMap": "Voir les projets sur la carte",
+  "viewCategory": "Voir les projets pour {{title}}",
+  "pioneer": "Pionnier",
+  "exploreAluminum": "Découvrir les plinthes en aluminium",
+  "aluminumProfiles": "Profilés de plinthes en aluminium",
+  "exploreMore": "En savoir plus",
+  "categoryNotFound": "Catégorie introuvable !",
+  "backToPortfolio": "Retour au portfolio",
+  "projectNotFound": "Projet introuvable !",
+  "loadingProject": "Chargement du projet...",
+  "showFolder": "Afficher {{folder}}",
+  "hideFolder": "Masquer {{folder}}",
+  "sectionOther": "Galerie",
+  "sectionsLabel": "Sections du projet",
+  "aluminum": {
+    "heroTitle": "Profilés de plinthes en aluminium transformateurs",
+    "heroSubtitle": "Sublimez votre espace avec des profilés en aluminium épurés et modernes, alliant fonctionnalité et style.",
+    "discover": "Découvrir",
+    "premiumTitle": "Profilés de plinthes en aluminium haut de gamme",
+    "premiumSubtitle": "Découvrez des profilés épurés et modernes qui rehaussent l'esthétique de tout espace.",
+    "feature1Title": "Touche moderne · Finition soignée · Design épuré",
+    "feature1Text": "Découvrez le pouvoir transformateur de nos profilés de plinthes en aluminium haut de gamme pour tout espace.",
+    "feature2Title": "Aspect impeccable · Fonctionnalité · Style · Propreté",
+    "feature2Text": "Rehaussez chaque recoin avec des profilés de plinthes en aluminium impeccables et raffinés.",
+    "feature3Title": "Cadre résidentiel et commercial · Souci du détail · Design de précision",
+    "feature3Text": "Transformez votre espace grâce au souci du détail et à la précision de nos profilés épurés.",
+    "sleekTitle": "Profilés épurés",
+    "sleekSubtitle": "Pouvoir transformateur, lignes nettes, touche moderne, aspect impeccable, propreté irréprochable",
+    "att001Name": "Profilé en aluminium ATT-001",
+    "att001Desc": "Profilé en aluminium durable, élégant et polyvalent pour vos projets.",
+    "att001Tag": "Profilé pour murs enduits",
+    "att001Heading": "ATT-001 - Précision pour murs enduits",
+    "att001Body": "Conçu pour les <strong>murs enduits</strong>, le profilé en aluminium <strong>ATT-001</strong> crée harmonieusement un <strong>joint creux de 2 cm</strong> entre les murs et le sol, apportant une esthétique épurée et moderne. Ce profilé a été appliqué avec succès dans de nombreux projets, offrant durabilité et précision. Pour des performances optimales, il doit être installé selon le guide de pose fourni. L'<strong>ATT-001</strong> soigne la transition entre les surfaces, ce qui en fait un choix idéal pour les architectes et designers en quête d'une finition raffinée et sans rupture.",
+    "att002Name": "Profilé en aluminium ATT-002",
+    "att002Tag": "Profilé pour habillages muraux",
+    "att002Heading": "ATT-002 - Parfait pour les habillages (tous types)",
+    "att002Body": "En complément de l'<strong>ATT-001</strong>, le profilé en aluminium <strong>ATT-002</strong> est conçu pour les <strong>habillages en bois et en marbre.</strong> Il crée lui aussi un <strong>joint creux de 2 cm</strong>, garantissant une finition cohérente et raffinée sur différentes surfaces. Qu'il soit utilisé pour des panneaux muraux ou des habillages décoratifs, l'<strong>ATT-002</strong> conserve un langage de design homogène, ce qui en fait un élément essentiel des finitions intérieures et architecturales haut de gamme. Ensemble, l'<strong>ATT-001</strong> et l'<strong>ATT-002</strong> offrent une solution complète pour des lignes nettes et une élégance contemporaine.",
+    "dimensions": "Dimensions",
+    "technicalGuide": "Guide technique"
+  }
+}

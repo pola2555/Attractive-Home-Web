@@ -1,0 +1,53 @@
+{
+  "heading": "Nous proposons une large gamme de services professionnels adaptés à vos besoins",
+  "items": {
+    "constructionManagement": {
+      "title": "Gestion de construction",
+      "description": "Gestion experte de projets de construction garantissant qualité et efficacité."
+    },
+    "remodeling": {
+      "title": "Rénovation",
+      "description": "Transformez vos espaces grâce à nos services de rénovation de haute qualité."
+    },
+    "installFlooring": {
+      "title": "Pose de revêtements de sol",
+      "description": "Installation professionnelle de revêtements de sol durables et élégants."
+    },
+    "exteriorDesign": {
+      "title": "Design extérieur",
+      "description": "Transformez les espaces extérieurs avec des aménagements magnifiques et fonctionnels."
+    },
+    "fitOut": {
+      "title": "Aménagement",
+      "description": "Solutions d'aménagement sur mesure pour espaces commerciaux et résidentiels."
+    },
+    "interiorDesign": {
+      "title": "Design d'intérieur",
+      "description": "Solutions de design d'intérieur créatives et fonctionnelles adaptées à votre style et à vos besoins."
+    },
+    "plumbing": {
+      "title": "Installation d'appareils de plomberie",
+      "description": "Installation efficace d'appareils de plomberie pour cuisines, salles de bains et plus encore."
+    },
+    "excavation": {
+      "title": "Terrassement de chantier",
+      "description": "Services de terrassement précis et efficaces pour tous types de chantiers."
+    },
+    "structuralRepairs": {
+      "title": "Réparations structurelles intérieures",
+      "description": "Réparations expertes pour préserver l'intégrité et la sécurité de votre bâtiment."
+    },
+    "exteriorPainting": {
+      "title": "Peinture extérieure",
+      "description": "Services de peinture extérieure de haute qualité pour rafraîchir et protéger votre bâtiment."
+    },
+    "mep": {
+      "title": "Solutions MEP",
+      "description": "Solutions complètes de mécanique, électricité et plomberie pour des systèmes efficaces."
+    },
+    "shopDrawings": {
+      "title": "Plans d'exécution",
+      "description": "Plans d'exécution précis pour une construction et une fabrication exactes."
+    }
+  }
+}

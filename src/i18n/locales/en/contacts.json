@@ -1,0 +1,22 @@
+{
+  "headline": "WE WILL CALL YOU BACK, ANSWER YOUR QUESTIONS AND FIND THE SOLUTION FOR ANY TASK YOU HAVE",
+  "subtext": "Discussion of the project does not oblige you to anything: we will tell you about ourselves and options for implementing your ideas, and you will decide on cooperation.",
+  "thankYou": "Thank you!",
+  "thankYouSub": "We received your request and will call you back soon.",
+  "sendAnother": "Send another",
+  "nameLabel": "Enter your name*",
+  "namePlaceholder": "Your Name",
+  "phoneLabel": "Phone Number",
+  "phonePlaceholder": "Your Phone Number",
+  "errorRequired": "Please enter your name or phone number.",
+  "errorGeneric": "Something went wrong. Please try again later.",
+  "sending": "SENDING...",
+  "send": "SEND",
+  "notProvided": "(not provided)",
+  "contactInfo": "Contact Information",
+  "orderProject": "ORDER A PROJECT",
+  "dubai": "DUBAI",
+  "address": "79P6+86, Al Qusais, Al Nahda 1, Dubai, United Arab Emirates",
+  "mapName": "Attractive Home",
+  "mapAddress": "Al Qusais, Al Nahda 1, Dubai"
+}

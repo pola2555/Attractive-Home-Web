@@ -1,0 +1,41 @@
+{
+  "documentTitle": "Attractive Home | شركة متخصصة في الهندسة المعمارية والتصميم الداخلي والتشطيبات في الإمارات",
+  "nav": {
+    "about": "من نحن",
+    "portfolio": "أعمالنا",
+    "catalog": "الكتالوج",
+    "visualizer": "المعاينة",
+    "contacts": "تواصل معنا",
+    "services": "خدماتنا"
+  },
+  "language": {
+    "switchToArabic": "العربية",
+    "switchToEnglish": "EN",
+    "label": "اللغة",
+    "en": "English",
+    "ar": "العربية",
+    "fr": "Français",
+    "ru": "Русский"
+  },
+  "footer": {
+    "aboutUs": "من نحن",
+    "contacts": "تواصل معنا",
+    "services": "خدماتنا",
+    "portfolio": "أعمالنا",
+    "architectural": "التصميم المعماري",
+    "interior": "التصميم الداخلي",
+    "fitOut": "التشطيبات الداخلية",
+    "companyName": "Attractive Home",
+    "rights": "© 2013 — 2026 Attractive Home. جميع الحقوق محفوظة."
+  },
+  "notFound": {
+    "message": "عذرًا! الصفحة التي تبحث عنها غير موجودة.",
+    "goHome": "العودة إلى الرئيسية"
+  },
+  "logout": "تسجيل الخروج",
+  "whatsapp": "تحدّث معنا عبر واتساب",
+  "theme": {
+    "switchToLight": "التبديل إلى الوضع الفاتح",
+    "switchToDark": "التبديل إلى الوضع الداكن"
+  }
+}

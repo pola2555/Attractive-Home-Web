@@ -1,49 +1,121 @@
+@import 'tailwindcss';
+
+/* Brown Pro – single family with normal and bold (same sources as the old site) */
+@font-face {
+  font-family: 'Brown Pro';
+  src:
+    url('https://db.onlinewebfonts.com/t/4d3847a46ccc828409d7f134d765b8c3.woff2') format('woff2'),
+    url('https://db.onlinewebfonts.com/t/4d3847a46ccc828409d7f134d765b8c3.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Brown Pro';
+  src:
+    url('https://db.onlinewebfonts.com/t/22a6f4f2037b8ced0e58090cefd039bb.woff2') format('woff2'),
+    url('https://db.onlinewebfonts.com/t/22a6f4f2037b8ced0e58090cefd039bb.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ============================================================================
+   THEME TOKENS — ported verbatim from the old site's index.css.
+   Semantic colour roles as space-separated RGB channels (so opacity modifiers
+   like `text-ink/80` keep working). Dark is the default and matches the
+   original design; the light set is the mirror. To retheme the site, edit the
+   numbers here — components reference roles, never raw hexes.
+   ========================================================================== */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --bg: 13 38 55; /* #0d2637 page background */
+  --bg-deep: 9 26 38; /* #091a26 footer / sub-header / overlays */
+  --surface: 20 51 68; /* #143344 cards, inputs, panels */
+  --surface-2: 15 42 59; /* #0f2a3b deeper surface / image placeholders */
+  --ink: 245 230 211; /* #f5e6d3 primary text (cream) */
+  --ink-soft: 237 219 179; /* #eddbb3 lighter cream text */
+  --muted: 159 182 194; /* #9fb6c2 muted text */
+  --heading: 230 201 168; /* #e6c9a8 headings / links */
+  --accent: 196 134 74; /* #c4864a primary caramel accent */
+  --accent-soft: 212 165 116; /* #d4a574 soft caramel */
+  --accent-2: 230 201 168; /* #e6c9a8 light caramel chip/border bg */
+  --brown: 139 69 19; /* #8b4513 brown button/accent */
+  --brown-hover: 114 58 16; /* #723a10 brown hover */
+  --line: 39 72 92; /* #27485c subtle border */
+  --line-strong: 90 46 13; /* #5a2e0d decorative brown border */
+  --on-accent: 9 26 38; /* #091a26 text on caramel/light surfaces */
+  --paper: 245 240 235; /* #f5f0eb intentionally-light surface */
+  --on-media: 245 230 211; /* cream text over dark hero media — ALWAYS light */
+  --on-media-soft: 226 208 183; /* softer cream for secondary text over media */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: 234 224 205;
+  --bg-deep: 223 211 189;
+  --surface: 243 234 217;
+  --surface-2: 231 220 200;
+  --ink: 26 38 46;
+  --ink-soft: 74 86 96;
+  --muted: 102 112 122;
+  --heading: 122 74 30;
+  --accent: 176 112 46;
+  --accent-soft: 150 96 38;
+  --accent-2: 232 214 186;
+  --brown: 139 69 19;
+  --brown-hover: 110 54 16;
+  --line: 216 204 183;
+  --line-strong: 202 188 165;
+  --on-accent: 20 36 46;
+  --paper: 243 234 217;
 }
 
-html {
-  height: 100%;
+/* The navbar logo is a light cream wordmark made for a dark bar; darken it for
+   contrast in light mode. */
+:root[data-theme='light'] .ah-navbar-logo {
+  filter: brightness(0.42) contrast(1.05) saturate(1.1);
 }
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
+@theme inline {
+  --font-sans: 'Brown Pro', var(--font-cairo, 'Cairo'), sans-serif;
+  --color-bg: rgb(var(--bg));
+  --color-bg-deep: rgb(var(--bg-deep));
+  --color-surface: rgb(var(--surface));
+  --color-surface-2: rgb(var(--surface-2));
+  --color-ink: rgb(var(--ink));
+  --color-ink-soft: rgb(var(--ink-soft));
+  --color-muted: rgb(var(--muted));
+  --color-heading: rgb(var(--heading));
+  --color-accent: rgb(var(--accent));
+  --color-accent-soft: rgb(var(--accent-soft));
+  --color-accent-2: rgb(var(--accent-2));
+  --color-brand-brown: rgb(var(--brown));
+  --color-brand-brown-hover: rgb(var(--brown-hover));
+  --color-line: rgb(var(--line));
+  --color-line-strong: rgb(var(--line-strong));
+  --color-on-accent: rgb(var(--on-accent));
+  --color-paper: rgb(var(--paper));
+  --color-on-media: rgb(var(--on-media));
+  --color-on-media-soft: rgb(var(--on-media-soft));
 }
 
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   html {
-    color-scheme: dark;
+    background-color: rgb(var(--bg));
+  }
+  body {
+    font-family: var(--font-sans);
+    background-color: rgb(var(--bg));
+    color: rgb(var(--ink));
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    body,
+    body * {
+      transition:
+        background-color 0.25s ease,
+        border-color 0.25s ease,
+        color 0.25s ease;
+    }
   }
 }

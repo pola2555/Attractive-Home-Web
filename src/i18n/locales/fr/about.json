@@ -1,0 +1,15 @@
+{
+  "whoWeAre": "Qui sommes-nous",
+  "aboutUs": "À propos",
+  "intro": "Depuis 2013, <1>Attractive Home</1> propose des solutions créatives en architecture, design d'intérieur et aménagement, alliant élégance, fonctionnalité et sens artistique. Nous transformons les espaces en expressions personnalisées de style et de confort.",
+  "company": "Attractive Home",
+  "pillars": {
+    "architectural": "Architecture",
+    "interior": "Intérieur",
+    "fitOut": "Aménagement"
+  },
+  "viewPortfolio": "Voir les projets du portfolio {{label}}",
+  "mapTitle": "Plus de 100 projets à travers Dubaï",
+  "mapSubtitle": "Découvrez notre portfolio sur la carte, de la conception architecturale et du design d'intérieur à l'aménagement. Cliquez sur un repère pour voir le projet.",
+  "viewProject": "Voir le projet"
+}

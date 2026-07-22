@@ -1,0 +1,53 @@
+{
+  "heading": "We provide a wide range of professional services tailored to your needs",
+  "items": {
+    "constructionManagement": {
+      "title": "Construction Management",
+      "description": "Expert management of construction projects ensuring quality and efficiency."
+    },
+    "remodeling": {
+      "title": "Remodeling",
+      "description": "Transform your spaces with our high-quality remodeling services."
+    },
+    "installFlooring": {
+      "title": "Install Flooring",
+      "description": "Professional installation of durable and stylish flooring options."
+    },
+    "exteriorDesign": {
+      "title": "Exterior Design",
+      "description": "Transform outdoor spaces with stunning and functional exterior designs."
+    },
+    "fitOut": {
+      "title": "Fit Out",
+      "description": "Customized fit-out solutions for commercial and residential spaces."
+    },
+    "interiorDesign": {
+      "title": "Interior Design",
+      "description": "Creative and functional interior design solutions tailored to your style and needs."
+    },
+    "plumbing": {
+      "title": "Plumbing Fixture Installation",
+      "description": "Efficient installation of plumbing fixtures for kitchens, bathrooms, and more."
+    },
+    "excavation": {
+      "title": "Construction Site Excavation",
+      "description": "Accurate and efficient excavation services for all types of construction sites."
+    },
+    "structuralRepairs": {
+      "title": "Interior Structural Repairs",
+      "description": "Expert repairs to maintain the integrity and safety of your building."
+    },
+    "exteriorPainting": {
+      "title": "Exterior Painting",
+      "description": "High-quality exterior painting services to refresh and protect your building."
+    },
+    "mep": {
+      "title": "MEP Solutions",
+      "description": "Comprehensive mechanical, electrical, and plumbing solutions for efficient systems."
+    },
+    "shopDrawings": {
+      "title": "Shop Drawings",
+      "description": "Accurate shop drawings for precise construction and manufacturing."
+    }
+  }
+}

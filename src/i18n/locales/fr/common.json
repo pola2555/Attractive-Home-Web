@@ -1,0 +1,41 @@
+{
+  "documentTitle": "Attractive Home | Société d'architecture, de design d'intérieur et d'aménagement aux Émirats arabes unis",
+  "nav": {
+    "about": "À PROPOS",
+    "portfolio": "PORTFOLIO",
+    "catalog": "CATALOGUE",
+    "visualizer": "VISUALISEUR",
+    "contacts": "CONTACT",
+    "services": "SERVICES"
+  },
+  "language": {
+    "switchToArabic": "العربية",
+    "switchToEnglish": "EN",
+    "label": "Langue",
+    "en": "English",
+    "ar": "العربية",
+    "fr": "Français",
+    "ru": "Русский"
+  },
+  "footer": {
+    "aboutUs": "À propos",
+    "contacts": "Contact",
+    "services": "Services",
+    "portfolio": "Portfolio",
+    "architectural": "Conception architecturale",
+    "interior": "Design d'intérieur",
+    "fitOut": "Aménagement intérieur",
+    "companyName": "Attractive Home",
+    "rights": "© 2013 — 2026 Attractive Home. Tous droits réservés."
+  },
+  "notFound": {
+    "message": "Oups ! La page que vous recherchez n'existe pas.",
+    "goHome": "Retour à l'accueil"
+  },
+  "logout": "DÉCONNEXION",
+  "whatsapp": "Discutez avec nous sur WhatsApp",
+  "theme": {
+    "switchToLight": "Passer en mode clair",
+    "switchToDark": "Passer en mode sombre"
+  }
+}
