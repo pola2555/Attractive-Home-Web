@@ -40,8 +40,9 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
   const isCatalogRef = useRef(isCatalog);
   useEffect(() => {
     isCatalogRef.current = isCatalog;
-    if (!isCatalog) setHidden(false);
   }, [isCatalog]);
+  // Collapse only ever applies on the catalog page — derived, not synced state.
+  const collapsed = hidden && isCatalog && !menuOpen;
 
   // Collapse on scroll-down / reveal on fast scroll-up — catalog page only.
   useEffect(() => {
@@ -90,7 +91,7 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
   return (
     <nav
       className={`fixed top-0 w-full flex justify-between items-center px-4 sm:px-6 lg:px-10 py-5 z-[1000] text-ink transition-all duration-300 ${
-        hidden && !menuOpen ? '-translate-y-full' : 'translate-y-0'
+        collapsed ? '-translate-y-full' : 'translate-y-0'
       } bg-transparent border-0 shadow-none`}
       style={{ backdropFilter: 'blur(6px)' }}
     >
