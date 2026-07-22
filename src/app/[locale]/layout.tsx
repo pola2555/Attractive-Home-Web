@@ -7,6 +7,8 @@ import { getContactSettings } from '@/lib/content';
 import Navbar, { type NavbarLabels } from '@/components/Navbar';
 import Footer, { type FooterLabels } from '@/components/Footer';
 import WhatsAppButton from '@/components/WhatsAppButton';
+import Analytics from '@/components/Analytics';
+import { SITE_URL } from '@/lib/seo';
 import '../globals.css';
 
 // Cairo carries the Arabic glyphs; Brown Pro (loaded via @font-face in
@@ -69,13 +71,30 @@ export default async function LocaleLayout({
     rights: t(common, 'footer.rights'),
   };
 
+  // Organization structured data — name/phone/socials from DB settings.
+  const orgJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Attractive Home',
+    url: SITE_URL,
+    logo: `${SITE_URL}/Logo EN.webp`,
+    email: settings.email,
+    telephone: settings.phones[0]?.number,
+    sameAs: settings.socialLinks.map((l) => l.url),
+  };
+
   return (
     <html lang={locale} dir={dirOf(locale)} className={cairo.variable}>
       <body className="antialiased">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+        />
         <Navbar locale={locale} labels={navbarLabels} />
         <main>{children}</main>
         <WhatsAppButton number={settings.whatsapp} label={t(common, 'whatsapp')} />
         <Footer locale={locale} labels={footerLabels} socialLinks={settings.socialLinks} />
+        <Analytics />
       </body>
     </html>
   );
