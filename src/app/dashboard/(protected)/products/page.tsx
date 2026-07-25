@@ -58,7 +58,17 @@ export default async function DashboardProductsPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-heading mb-6">Products — price entry</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-heading">Products</h1>
+        {canWrite && (
+          <Link
+            href="/dashboard/products/new"
+            className="px-4 py-2 rounded-lg bg-brand-brown hover:bg-brand-brown-hover text-white text-sm"
+          >
+            + New product
+          </Link>
+        )}
+      </div>
 
       <form method="get" className="flex flex-wrap gap-3 mb-6">
         <input
@@ -85,7 +95,8 @@ export default async function DashboardProductsPage({
             <th className="text-start py-2 pe-4">Name (en)</th>
             <th className="text-start py-2 pe-4">Price (AED)</th>
             <th className="text-start py-2 pe-4">Unit</th>
-            {canWrite && <th className="text-start py-2">Save</th>}
+            {canWrite && <th className="text-start py-2 pe-4">Save</th>}
+            <th className="text-start py-2">Edit</th>
           </tr>
         </thead>
         <tbody>
@@ -93,7 +104,13 @@ export default async function DashboardProductsPage({
             <tr key={product.id} className="border-b border-line/50 hover:bg-surface/60">
               <td className="py-2 pe-4 text-muted">{product.legacyId}</td>
               <td className="py-2 pe-4">{product.code ?? '—'}</td>
-              <td className="py-2 pe-4">{product.translations[0]?.name ?? '—'}</td>
+              <td className="py-2 pe-4">
+                <span
+                  title={product.isPublished ? 'Published' : 'Unpublished'}
+                  className={`inline-block w-2 h-2 rounded-full me-2 align-middle ${product.isPublished ? 'bg-green-500' : 'bg-line-strong'}`}
+                />
+                {product.translations[0]?.name ?? '—'}
+              </td>
               {canWrite ? (
                 <>
                   <td className="py-2 pe-4">
@@ -131,6 +148,14 @@ export default async function DashboardProductsPage({
                   <td className="py-2 pe-4">{product.priceUnit ?? '—'}</td>
                 </>
               )}
+              <td className="py-2">
+                <Link
+                  href={`/dashboard/products/${product.id}/edit`}
+                  className="text-accent hover:underline"
+                >
+                  Edit
+                </Link>
+              </td>
             </tr>
           ))}
         </tbody>

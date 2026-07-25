@@ -1,3 +1,4 @@
+import 'server-only';
 import { cache } from 'react';
 import { z } from 'zod';
 import { prisma } from './prisma';

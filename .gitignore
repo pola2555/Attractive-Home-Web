@@ -46,3 +46,6 @@ docs/
 
 # one-time import source data copied from the old repo / S3 exports (docs/DATABASE.md §8)
 /scripts/import/data/
+
+# internal migration planning doc (kept local)
+/MIGRATION-PLAN.md

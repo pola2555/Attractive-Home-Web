@@ -7,6 +7,7 @@ import { getContactSettings } from '@/lib/content';
 import Navbar, { type NavbarLabels } from '@/components/Navbar';
 import Footer, { type FooterLabels } from '@/components/Footer';
 import WhatsAppButton from '@/components/WhatsAppButton';
+import ShortlistBar, { type ShortlistLabels } from '@/components/ShortlistBar';
 import Analytics from '@/components/Analytics';
 import { SITE_URL } from '@/lib/seo';
 import '../globals.css';
@@ -43,7 +44,33 @@ export default async function LocaleLayout({
   if (!isLocale(raw)) notFound();
   const locale: Locale = raw;
 
-  const [common, settings] = await Promise.all([getDictionary(locale, 'common'), getContactSettings()]);
+  const [common, catalog, settings] = await Promise.all([
+    getDictionary(locale, 'common'),
+    getDictionary(locale, 'catalog'),
+    getContactSettings(),
+  ]);
+
+  const shortlistLabels: ShortlistLabels = {
+    compare: t(catalog, 'compare'),
+    compareNow: t(catalog, 'compareNow'),
+    clear: t(catalog, 'clear'),
+    saved: t(catalog, 'saved'),
+    copyCodes: t(catalog, 'copyCodes'),
+    copied: t(catalog, 'copied'),
+    noSaved: t(catalog, 'noSaved'),
+    close: t(catalog, 'close'),
+    spec: {
+      type: t(catalog, 'facet.type'),
+      material: t(catalog, 'facet.material'),
+      look: t(catalog, 'facet.look'),
+      color: t(catalog, 'facet.color'),
+      finish: t(catalog, 'spec.finish'),
+      size: t(catalog, 'facet.size'),
+      application: t(catalog, 'facet.application'),
+      collection: t(catalog, 'facet.collection'),
+      brand: t(catalog, 'facet.brand'),
+    },
+  };
 
   const navbarLabels: NavbarLabels = {
     about: t(common, 'nav.about'),
@@ -93,6 +120,7 @@ export default async function LocaleLayout({
         <Navbar locale={locale} labels={navbarLabels} />
         <main>{children}</main>
         <WhatsAppButton number={settings.whatsapp} label={t(common, 'whatsapp')} />
+        <ShortlistBar locale={locale} labels={shortlistLabels} />
         <Footer locale={locale} labels={footerLabels} socialLinks={settings.socialLinks} />
         <Analytics />
       </body>

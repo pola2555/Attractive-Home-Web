@@ -1,3 +1,4 @@
+import 'server-only';
 import { PrismaClient } from '@prisma/client';
 
 // Singleton — dev hot-reload creates fresh module instances, so cache the

@@ -1,3 +1,4 @@
+import 'server-only';
 import { uuidv7 } from 'uuidv7';
 import { prisma } from './prisma';
 import type { AuditAction, Prisma } from '@prisma/client';

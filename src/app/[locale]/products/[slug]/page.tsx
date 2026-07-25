@@ -8,6 +8,7 @@ import { pickTranslation, localeFilter } from '@/lib/translate';
 import { productMediaUrl } from '@/lib/media';
 import { alternates, localeUrl } from '@/lib/seo';
 import { getContactSettings } from '@/lib/content';
+import { productCardInclude } from '@/lib/catalog';
 import ProductGallery from '@/components/ProductGallery';
 import ProductCard from '@/components/ProductCard';
 import SocialIcon from '@/components/SocialIcon';
@@ -142,11 +143,7 @@ export default async function ProductPage({
     },
     orderBy: { legacyId: 'asc' },
     take: 8,
-    include: {
-      translations: { where: localeFilter(locale) },
-      images: { where: { sortOrder: 0 } },
-      source: { select: { code: true } },
-    },
+    include: productCardInclude(locale),
   });
 
   // Product structured data for rich results; offers only once real prices exist.
