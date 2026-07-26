@@ -17,6 +17,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     { label: 'Facets', href: '/dashboard/facets', show: permissions.has('catalog.read') },
     { label: 'Portfolio', href: '/dashboard/portfolio', show: permissions.has('portfolio.write') },
     { label: 'Services', href: '/dashboard/services', show: permissions.has('content.write') },
+    { label: 'Content', href: '/dashboard/content', show: permissions.has('content.write') },
+    { label: 'Settings', href: '/dashboard/settings', show: permissions.has('settings.write') },
   ].filter((item) => item.show);
 
   return (
