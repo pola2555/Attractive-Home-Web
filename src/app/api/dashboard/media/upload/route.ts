@@ -13,6 +13,7 @@ export const runtime = 'nodejs';
 const KINDS: Record<string, { permission: string; prefix: string }> = {
   product: { permission: 'catalog.write', prefix: 'product-images/uploads' },
   project: { permission: 'portfolio.write', prefix: 'projects/uploads' },
+  service: { permission: 'content.write', prefix: 'Services/uploads' },
 };
 
 const EXT_BY_TYPE: Record<string, string> = {
