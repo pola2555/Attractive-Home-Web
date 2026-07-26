@@ -7,6 +7,14 @@ import { siteMediaUrl } from '@/lib/media';
 // Staff image upload → S3. Node runtime (needs Buffer + the AWS SDK).
 export const runtime = 'nodejs';
 
+// Upload target per `kind`: which permission gates it and which key prefix it
+// lands under. Product and project media both live in the site bucket, so
+// siteMediaUrl() resolves either. Unknown kinds fall back to product.
+const KINDS: Record<string, { permission: string; prefix: string }> = {
+  product: { permission: 'catalog.write', prefix: 'product-images/uploads' },
+  project: { permission: 'portfolio.write', prefix: 'projects/uploads' },
+};
+
 const EXT_BY_TYPE: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -17,8 +25,11 @@ const EXT_BY_TYPE: Record<string, string> = {
 const MAX_BYTES = 12 * 1024 * 1024; // 12 MB
 
 export async function POST(req: NextRequest) {
+  const form = await req.formData();
+  const kind = KINDS[String(form.get('kind') ?? 'product')] ?? KINDS.product;
+
   try {
-    await requirePermission('catalog.write');
+    await requirePermission(kind.permission);
   } catch (err) {
     if (err instanceof AccessDeniedError) {
       return NextResponse.json({ error: 'Not authorized.' }, { status: 403 });
@@ -33,7 +44,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const form = await req.formData();
   const file = form.get('file');
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
@@ -46,7 +56,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Image is too large (max 12 MB).' }, { status: 413 });
   }
 
-  const key = `product-images/uploads/${uuidv7()}.${ext}`;
+  const key = `${kind.prefix}/${uuidv7()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
   try {
     await uploadObject(key, buffer, file.type);
