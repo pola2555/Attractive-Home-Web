@@ -17,6 +17,7 @@
     "verify:db": "tsx scripts/verify/db-checks.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1095.0",
     "@prisma/client": "^6.19.3",
     "@tailwindcss/postcss": "^4.3.3",
     "argon2": "^0.45.1",

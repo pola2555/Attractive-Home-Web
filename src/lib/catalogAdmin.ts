@@ -1,5 +1,6 @@
 import 'server-only';
 import { prisma } from './prisma';
+import { productMediaUrl } from './media';
 import { LOCALES, type Locale } from '@/i18n/config';
 
 // Admin-side catalog helpers (dashboard is English-only). Kept separate from
@@ -98,6 +99,7 @@ export type ProductImageInput = {
   supplierUrl: string;
   width: string;
   height: string;
+  url: string; // resolved preview URL for the dashboard
 };
 
 export type ProductFormInitial = {
@@ -148,6 +150,7 @@ export async function getProductForEdit(id: string): Promise<ProductFormInitial 
       applications: { select: { applicationId: true } },
       performance: { select: { performanceAttributeId: true } },
       images: { orderBy: { sortOrder: 'asc' } },
+      source: { select: { code: true } },
     },
   });
   if (!product) return null;
@@ -199,6 +202,7 @@ export async function getProductForEdit(id: string): Promise<ProductFormInitial 
       supplierUrl: img.supplierUrl ?? '',
       width: img.width === null ? '' : String(img.width),
       height: img.height === null ? '' : String(img.height),
+      url: productMediaUrl(img.thumbKey ?? img.s3Key, product.source.code),
     })),
   };
 }
