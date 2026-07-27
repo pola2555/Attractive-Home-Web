@@ -1,0 +1,53 @@
+// docs/DATABASE.md — module: customers (Phase 5, net-new).
+// Customer accounts are FULLY SEPARATE from staff `users`/RBAC — never
+// overloaded onto them. Email+password now; `passwordHash` is nullable so a
+// future Google OAuth account can exist without one. `securityStamp` mirrors
+// the staff revocation pattern for the isolated customer Auth.js instance
+// (distinct cookie + basePath). `purpose` is a plain string (bounded, code-
+// driven: 'verify_email' | 'reset_password') to avoid a sixth global enum.
+
+model Customer {
+  id              String    @id @db.Uuid
+  email           String    @unique
+  passwordHash    String?   @map("password_hash") // nullable — OAuth-only accounts later
+  name            String?
+  isActive        Boolean   @default(true) @map("is_active")
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz(6)
+  securityStamp   String    @map("security_stamp") @db.Uuid
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  favorites   CustomerFavorite[]
+  emailTokens CustomerEmailToken[]
+
+  @@map("customers")
+}
+
+model CustomerFavorite {
+  customerId String   @map("customer_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([customerId, productId])
+  @@index([productId]) // like/favorite counts per product
+  @@map("customer_favorites")
+}
+
+model CustomerEmailToken {
+  id         String    @id @db.Uuid
+  customerId String    @map("customer_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") // SHA-256 of the token, never the raw value
+  purpose    String // 'verify_email' | 'reset_password'
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt     DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_email_tokens")
+}

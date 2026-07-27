@@ -12,6 +12,7 @@ import { productCardInclude } from '@/lib/catalog';
 import ProductGallery from '@/components/ProductGallery';
 import ProductCard from '@/components/ProductCard';
 import SocialIcon from '@/components/SocialIcon';
+import FavoriteButton from '@/components/favorites/FavoriteButton';
 
 export const revalidate = 3600;
 
@@ -112,7 +113,11 @@ export default async function ProductPage({
   const product = await loadProduct(locale, slug);
   if (!product || !product.isPublished) notFound();
 
-  const [dict, settings] = await Promise.all([getDictionary(locale, 'catalog'), getContactSettings()]);
+  const [dict, account, settings] = await Promise.all([
+    getDictionary(locale, 'catalog'),
+    getDictionary(locale, 'account'),
+    getContactSettings(),
+  ]);
   const tr = pickTranslation(product.translations, locale);
   const name = tr?.name ?? product.code ?? slug;
   const specs = specRows(product, locale, dict);
@@ -224,15 +229,26 @@ export default async function ProductPage({
             {tr?.description && <p className="text-ink-soft leading-relaxed">{tr.description}</p>}
             {tr?.usageNotes && <p className="text-muted text-sm leading-relaxed">{tr.usageNotes}</p>}
 
-            <a
-              href={`https://wa.me/${settings.whatsapp}?text=${waText}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
-            >
-              <SocialIcon platform="whatsapp" className="w-5 h-5" />
-              {t(dict, 'orderWhatsapp')}
-            </a>
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href={`https://wa.me/${settings.whatsapp}?text=${waText}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+              >
+                <SocialIcon platform="whatsapp" className="w-5 h-5" />
+                {t(dict, 'orderWhatsapp')}
+              </a>
+              <FavoriteButton
+                productId={product.id}
+                locale={locale}
+                labels={{
+                  save: t(account, 'save'),
+                  saved: t(account, 'saved'),
+                  signInToSave: t(account, 'signInToSave'),
+                }}
+              />
+            </div>
           </div>
         </div>
 

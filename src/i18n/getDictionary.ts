@@ -10,7 +10,8 @@ export type Namespace =
   | 'contacts'
   | 'services'
   | 'catalog'
-  | 'portfolio';
+  | 'portfolio'
+  | 'account';
 
 export type Dictionary = Record<string, unknown>;
 

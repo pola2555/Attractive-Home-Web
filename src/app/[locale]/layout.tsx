@@ -8,6 +8,7 @@ import Navbar, { type NavbarLabels } from '@/components/Navbar';
 import Footer, { type FooterLabels } from '@/components/Footer';
 import WhatsAppButton from '@/components/WhatsAppButton';
 import ShortlistBar, { type ShortlistLabels } from '@/components/ShortlistBar';
+import FavoritesProvider from '@/components/favorites/FavoritesProvider';
 import Analytics from '@/components/Analytics';
 import { SITE_URL } from '@/lib/seo';
 import '../globals.css';
@@ -117,10 +118,12 @@ export default async function LocaleLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
         />
-        <Navbar locale={locale} labels={navbarLabels} />
-        <main>{children}</main>
-        <WhatsAppButton number={settings.whatsapp} label={t(common, 'whatsapp')} />
-        <ShortlistBar locale={locale} labels={shortlistLabels} />
+        <FavoritesProvider>
+          <Navbar locale={locale} labels={navbarLabels} />
+          <main>{children}</main>
+          <WhatsAppButton number={settings.whatsapp} label={t(common, 'whatsapp')} />
+          <ShortlistBar locale={locale} labels={shortlistLabels} />
+        </FavoritesProvider>
         <Footer locale={locale} labels={footerLabels} socialLinks={settings.socialLinks} />
         <Analytics />
       </body>

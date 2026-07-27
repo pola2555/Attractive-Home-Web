@@ -341,6 +341,7 @@ model Product {
   performance  ProductPerformance[]
   images       ProductImage[]
   leads        Lead[]
+  favorites    CustomerFavorite[]
 
   @@index([sourceId])
   @@index([brandId])

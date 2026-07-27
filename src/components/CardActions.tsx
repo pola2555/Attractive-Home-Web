@@ -1,12 +1,18 @@
 'use client';
 
 import { useMember, toggle, SAVE_KEY, COMPARE_KEY, COMPARE_MAX } from './shortlistStore';
+import { useFavorites } from './favorites/FavoritesProvider';
 
-// Save (♥) + Compare (⇄) card affordances — localStorage-backed via the shared
-// shortlist store. The floating tray/panels live in ShortlistBar.
+// Save (♥) + Compare (⇄) card affordances. Compare is always the localStorage
+// shortlist; Save is the customer's SERVER favorite when signed in, otherwise
+// the localStorage shortlist. The floating tray/panels live in ShortlistBar.
 export default function CardActions({ productId, className }: { productId: string; className?: string }) {
-  const saved = useMember(SAVE_KEY, productId);
+  const favorites = useFavorites();
+  const localSaved = useMember(SAVE_KEY, productId);
   const compared = useMember(COMPARE_KEY, productId);
+
+  const saved = favorites.authed ? favorites.has(productId) : localSaved;
+  const saveToggle = () => (favorites.authed ? favorites.toggle(productId) : toggle(SAVE_KEY, productId));
 
   const btn = (on: boolean) =>
     `w-8 h-8 rounded-[9px] flex items-center justify-center text-[15px] shadow transition-colors ${
@@ -27,7 +33,7 @@ export default function CardActions({ productId, className }: { productId: strin
         type="button"
         aria-label="Save"
         aria-pressed={saved}
-        onClick={stop(() => toggle(SAVE_KEY, productId))}
+        onClick={stop(saveToggle)}
         className={btn(saved)}
       >
         ♥
