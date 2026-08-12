@@ -9,6 +9,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/permissions';
 import { writeAudit } from '@/lib/audit';
+import { createStaffPasswordResetToken, STAFF_RESET_TTL_HOURS } from '@/lib/authTokens';
+import { sendStaffPasswordResetEmail } from '@/lib/email';
 
 export type FormState = { error?: string };
 
@@ -209,4 +211,35 @@ export async function updateUser(
   });
   revalidatePath('/dashboard/users');
   redirect('/dashboard/users');
+}
+
+// ---------------------------------------------------------------------------
+// Send a password-reset link to a staff member (admin-initiated; the
+// alternative to typing a new password for them). Reuses the same single-use
+// token + email as the self-service flow. Invoked as a bound <form action>.
+// ---------------------------------------------------------------------------
+
+export async function sendUserPasswordReset(userId: string): Promise<void> {
+  const actor = await requirePermission('users.manage');
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, name: true, isActive: true },
+  });
+  if (!user || !user.isActive) redirect(`/dashboard/users/${userId}/edit?reset_error=1`);
+
+  const token = await createStaffPasswordResetToken(user.id);
+  const result = await sendStaffPasswordResetEmail({
+    to: user.email,
+    name: user.name,
+    token,
+    expiresInHours: STAFF_RESET_TTL_HOURS,
+  });
+  await writeAudit({
+    userId: actor.id,
+    entityType: 'user',
+    entityId: userId,
+    action: 'update',
+    diff: { password_reset: { from: null, to: result.skipped ? 'skipped (email off)' : 'sent' } },
+  });
+  redirect(`/dashboard/users/${userId}/edit?${result.skipped ? 'reset_skipped=1' : 'reset_sent=1'}`);
 }

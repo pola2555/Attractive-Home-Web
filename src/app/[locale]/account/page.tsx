@@ -6,11 +6,17 @@ import { getDictionary, t } from '@/i18n/getDictionary';
 import { requireCustomer } from '@/lib/customer-auth';
 import { listFavoriteProducts } from '@/lib/favorites';
 import ProductCard from '@/components/ProductCard';
-import { signOutCustomer } from './actions';
+import { signOutCustomer, resendCustomerVerification } from './actions';
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-export default async function AccountPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function AccountPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ verify_sent?: string }>;
+}) {
   const { locale: raw } = await params;
   if (!isLocale(raw)) notFound();
   const locale: Locale = raw;
@@ -18,9 +24,10 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
   const customer = await requireCustomer();
   if (!customer) redirect(`/${locale}/account/sign-in`);
 
-  const [dict, favorites] = await Promise.all([
+  const [dict, favorites, { verify_sent }] = await Promise.all([
     getDictionary(locale, 'account'),
     listFavoriteProducts(customer.id, locale),
+    searchParams,
   ]);
 
   return (
@@ -33,7 +40,20 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
           </button>
         </form>
       </div>
-      <p className="text-muted mb-10">{t(dict, 'signedInAs', { email: customer.email })}</p>
+      <p className="text-muted mb-6">{t(dict, 'signedInAs', { email: customer.email })}</p>
+
+      {verify_sent && <p className="mb-6 text-sm text-green-600">{t(dict, 'verificationSent')}</p>}
+
+      {!customer.emailVerifiedAt && (
+        <div className="mb-10 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+          <p className="text-sm text-ink">{t(dict, 'emailUnverified')}</p>
+          <form action={resendCustomerVerification.bind(null, locale)}>
+            <button className="px-3 py-1.5 rounded-lg border border-line-strong text-ink text-sm hover:border-accent/60">
+              {t(dict, 'resendVerification')}
+            </button>
+          </form>
+        </div>
+      )}
 
       <h2 className="text-xl font-semibold text-heading mb-6">{t(dict, 'favorites')}</h2>
 
