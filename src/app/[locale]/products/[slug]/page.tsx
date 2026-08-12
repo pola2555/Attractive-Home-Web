@@ -13,6 +13,7 @@ import ProductGallery from '@/components/ProductGallery';
 import ProductCard from '@/components/ProductCard';
 import SocialIcon from '@/components/SocialIcon';
 import FavoriteButton from '@/components/favorites/FavoriteButton';
+import TrackedLink from '@/components/analytics/TrackedLink';
 
 export const revalidate = 3600;
 
@@ -230,7 +231,9 @@ export default async function ProductPage({
             {tr?.usageNotes && <p className="text-muted text-sm leading-relaxed">{tr.usageNotes}</p>}
 
             <div className="flex flex-wrap items-center gap-3">
-              <a
+              <TrackedLink
+                event="whatsapp_click"
+                params={{ location: 'product', product_slug: slug, product_code: product.code ?? undefined }}
                 href={`https://wa.me/${settings.whatsapp}?text=${waText}`}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -238,7 +241,7 @@ export default async function ProductPage({
               >
                 <SocialIcon platform="whatsapp" className="w-5 h-5" />
                 {t(dict, 'orderWhatsapp')}
-              </a>
+              </TrackedLink>
               <FavoriteButton
                 productId={product.id}
                 locale={locale}

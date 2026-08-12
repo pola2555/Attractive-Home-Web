@@ -53,6 +53,29 @@ const SETTINGS: { key: string; value: Prisma.InputJsonValue; description: string
     ],
     description: 'Recipients of new-lead notification emails (was Lambda CONTACT_RECIPIENTS)',
   },
+  // Marketing tracking / verification — seeded empty; set in the dashboard
+  // Settings screen or via NEXT_PUBLIC_* env fallbacks. GTM is the single
+  // container (GA4 + Meta Pixel configured inside it). Prod: GTM-MDBSFGWM / G-9KNQVR72P7.
+  {
+    key: 'analytics.gtm_id',
+    value: '',
+    description: 'Google Tag Manager container id (GTM-XXXXXXX) — the single tracking entry point',
+  },
+  {
+    key: 'analytics.ga4_id',
+    value: '',
+    description: 'GA4 measurement id (G-XXXXXXXXXX) — used as a direct tag only when no GTM id is set',
+  },
+  {
+    key: 'tracking.meta_pixel_id',
+    value: '',
+    description: 'Meta (Facebook) Pixel id — only if not managed inside GTM',
+  },
+  {
+    key: 'seo.google_verification',
+    value: '',
+    description: 'Google Search Console verification token (renders the meta tag; DNS TXT is primary)',
+  },
 ];
 
 export async function seedSettings(prisma: PrismaClient): Promise<void> {

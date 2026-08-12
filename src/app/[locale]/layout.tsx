@@ -3,13 +3,15 @@ import { notFound } from 'next/navigation';
 import { Cairo } from 'next/font/google';
 import { LOCALES, isLocale, dirOf, type Locale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
-import { getContactSettings } from '@/lib/content';
+import { getContactSettings, getContentBlocks, getTrackingSettings } from '@/lib/content';
 import Navbar, { type NavbarLabels } from '@/components/Navbar';
 import Footer, { type FooterLabels } from '@/components/Footer';
 import WhatsAppButton from '@/components/WhatsAppButton';
 import ShortlistBar, { type ShortlistLabels } from '@/components/ShortlistBar';
 import FavoritesProvider from '@/components/favorites/FavoritesProvider';
-import Analytics from '@/components/Analytics';
+import TrackingScripts from '@/components/TrackingScripts';
+import TrackingNoScript from '@/components/TrackingNoScript';
+import RouteAnalytics from '@/components/RouteAnalytics';
 import { SITE_URL } from '@/lib/seo';
 import '../globals.css';
 
@@ -28,9 +30,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
-  const common = await getDictionary(locale, 'common');
+  const [common, tracking] = await Promise.all([getDictionary(locale, 'common'), getTrackingSettings()]);
   return {
     title: { default: t(common, 'documentTitle'), template: '%s | Attractive Home' },
+    // Google Search Console verification meta tag (DNS TXT is the primary method).
+    ...(tracking.googleVerification ? { verification: { google: tracking.googleVerification } } : {}),
   };
 }
 
@@ -45,10 +49,11 @@ export default async function LocaleLayout({
   if (!isLocale(raw)) notFound();
   const locale: Locale = raw;
 
-  const [common, catalog, settings] = await Promise.all([
+  const [common, catalog, settings, blocks] = await Promise.all([
     getDictionary(locale, 'common'),
     getDictionary(locale, 'catalog'),
     getContactSettings(),
+    getContentBlocks(locale),
   ]);
 
   const shortlistLabels: ShortlistLabels = {
@@ -99,21 +104,39 @@ export default async function LocaleLayout({
     rights: t(common, 'footer.rights'),
   };
 
-  // Organization structured data — name/phone/socials from DB settings.
+  // ProfessionalService structured data — name/phone/socials/address/geo from DB
+  // settings + content blocks (matches the old site's richer JSON-LD).
   const orgJsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'Organization',
+    '@type': 'ProfessionalService',
     name: 'Attractive Home',
     url: SITE_URL,
     logo: `${SITE_URL}/Logo EN.webp`,
+    image: `${SITE_URL}/Logo EN.webp`,
     email: settings.email,
     telephone: settings.phones[0]?.number,
+    foundingDate: '2013',
+    areaServed: 'AE',
+    ...(blocks['contact.address']
+      ? {
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: blocks['contact.address'],
+            addressLocality: 'Dubai',
+            addressCountry: 'AE',
+          },
+        }
+      : {}),
+    ...(settings.geo
+      ? { geo: { '@type': 'GeoCoordinates', latitude: settings.geo.lat, longitude: settings.geo.lng } }
+      : {}),
     sameAs: settings.socialLinks.map((l) => l.url),
   };
 
   return (
     <html lang={locale} dir={dirOf(locale)} className={cairo.variable}>
       <body className="antialiased">
+        <TrackingNoScript />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
@@ -125,7 +148,8 @@ export default async function LocaleLayout({
           <ShortlistBar locale={locale} labels={shortlistLabels} />
         </FavoritesProvider>
         <Footer locale={locale} labels={footerLabels} socialLinks={settings.socialLinks} />
-        <Analytics />
+        <RouteAnalytics locale={locale} />
+        <TrackingScripts />
       </body>
     </html>
   );

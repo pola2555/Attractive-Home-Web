@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from 'react';
 import { submitLead, type LeadFormState } from './actions';
+import { track } from '@/lib/analytics/track';
 
 export type ContactFormLabels = {
   nameLabel: string;
@@ -58,6 +59,13 @@ export default function ContactForm({
       alive = false;
     };
   }, []);
+
+  // Fire the conversion event once the lead is stored.
+  useEffect(() => {
+    if (state.status === 'success') {
+      track('generate_lead', { method: 'contact_form' }, { locale, path: sourcePath });
+    }
+  }, [state.status, locale, sourcePath]);
 
   if (state.status === 'success') {
     return (

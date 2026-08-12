@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import SocialIcon from './SocialIcon';
+import TrackedLink from './analytics/TrackedLink';
 import type { Locale } from '@/i18n/config';
 
 // Ported from the old Footer.jsx (flex-wrap icon layout). Social links come
@@ -72,13 +73,24 @@ export default function Footer({
             <h2 className="font-bold text-3xl mb-10">{labels.companyName}</h2>
             <p className="text-sm mb-10">{labels.rights}</p>
             <div className="flex justify-start gap-6 flex-wrap">
-              {socialLinks.map((item) => (
-                <a key={item.url} href={item.url} target="_blank" rel="noopener noreferrer" aria-label={item.platform}>
-                  <div className="w-8 h-8 rounded-full bg-white flex justify-center items-center shadow-md transition-transform duration-200 transform hover:scale-110">
-                    <SocialIcon platform={item.platform} className="w-5 h-5 text-black" />
-                  </div>
-                </a>
-              ))}
+              {socialLinks.map((item) => {
+                const isWhatsapp = item.platform.toLowerCase() === 'whatsapp';
+                return (
+                  <TrackedLink
+                    key={item.url}
+                    event={isWhatsapp ? 'whatsapp_click' : 'social_click'}
+                    params={isWhatsapp ? { location: 'footer' } : { location: 'footer', network: item.platform }}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={item.platform}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-white flex justify-center items-center shadow-md transition-transform duration-200 transform hover:scale-110">
+                      <SocialIcon platform={item.platform} className="w-5 h-5 text-black" />
+                    </div>
+                  </TrackedLink>
+                );
+              })}
             </div>
           </div>
         </div>

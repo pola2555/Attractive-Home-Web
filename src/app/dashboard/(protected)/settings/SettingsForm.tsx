@@ -147,6 +147,33 @@ export default function SettingsForm({
         </button>
       </section>
 
+      {/* Tracking & SEO */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-heading">Tracking &amp; SEO</h2>
+        <p className="text-muted text-xs">
+          Leave a field blank to disable that tag. GA4 and Meta Pixel are best configured inside the Tag
+          Manager container rather than added separately.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="block">
+            <span className={labelCls}>Google Tag Manager id</span>
+            <input name="gtmId" defaultValue={initial.gtmId} placeholder="GTM-XXXXXXX" className={inputCls} />
+          </label>
+          <label className="block">
+            <span className={labelCls}>GA4 measurement id (only if not using GTM)</span>
+            <input name="ga4Id" defaultValue={initial.ga4Id} placeholder="G-XXXXXXXXXX" className={inputCls} />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Meta Pixel id (only if not managed in GTM)</span>
+            <input name="metaPixelId" defaultValue={initial.metaPixelId} placeholder="1234567890" className={inputCls} />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Google Search Console token</span>
+            <input name="googleVerification" defaultValue={initial.googleVerification} placeholder="google-site-verification value" className={inputCls} />
+          </label>
+        </div>
+      </section>
+
       {/* Serialised lists */}
       <input type="hidden" name="phonesJson" value={JSON.stringify(phones.filter((p) => p.number.trim()))} />
       <input type="hidden" name="socialJson" value={JSON.stringify(social.filter((s) => s.platform.trim() && s.url.trim()))} />

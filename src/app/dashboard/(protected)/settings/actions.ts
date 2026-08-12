@@ -75,6 +75,19 @@ export async function updateSettings(_prev: FormState, formData: FormData): Prom
     geo = { lat, lng };
   }
 
+  // Tracking & SEO ids — each optional (empty disables the tag). Uppercased for
+  // the GTM/GA4 formats; validated so a typo never renders a broken script id.
+  const gtmId = str(formData, 'gtmId').toUpperCase();
+  if (gtmId && !/^GTM-[A-Z0-9]+$/.test(gtmId)) {
+    return { error: 'Google Tag Manager id must look like GTM-XXXXXXX.' };
+  }
+  const ga4Id = str(formData, 'ga4Id').toUpperCase();
+  if (ga4Id && !/^G-[A-Z0-9]+$/.test(ga4Id)) {
+    return { error: 'GA4 measurement id must look like G-XXXXXXXXXX.' };
+  }
+  const metaPixelId = str(formData, 'metaPixelId').replace(/[^\d]/g, '');
+  const googleVerification = str(formData, 'googleVerification');
+
   const values: Record<string, Prisma.InputJsonValue> = {
     'contact.phones': phones,
     'contact.email': email,
@@ -82,6 +95,10 @@ export async function updateSettings(_prev: FormState, formData: FormData): Prom
     'contact.geo': geo === null ? {} : geo, // {} sentinel; read side treats non-{lat,lng} as null
     'social.links': social,
     'leads.notify_emails': notifyEmails,
+    'analytics.gtm_id': gtmId,
+    'analytics.ga4_id': ga4Id,
+    'tracking.meta_pixel_id': metaPixelId,
+    'seo.google_verification': googleVerification,
   };
 
   await prisma.$transaction(

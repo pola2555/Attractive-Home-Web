@@ -18,6 +18,10 @@ export const SETTINGS_KEYS = [
   'contact.geo',
   'social.links',
   'leads.notify_emails',
+  'analytics.gtm_id',
+  'analytics.ga4_id',
+  'tracking.meta_pixel_id',
+  'seo.google_verification',
 ] as const;
 
 export type SettingsForm = {
@@ -27,6 +31,10 @@ export type SettingsForm = {
   geo: { lat: number; lng: number } | null;
   social: { platform: string; url: string }[];
   notifyEmails: string[];
+  gtmId: string;
+  ga4Id: string;
+  metaPixelId: string;
+  googleVerification: string;
 };
 
 export async function getSettingsForEdit(): Promise<SettingsForm> {
@@ -36,6 +44,8 @@ export async function getSettingsForEdit(): Promise<SettingsForm> {
   const phones = phoneListSchema.catch([]).parse(byKey.get('contact.phones') ?? []);
   const social = socialLinksSchema.catch([]).parse(byKey.get('social.links') ?? []);
 
+  const strOf = (key: string) => z.string().catch('').parse(byKey.get(key) ?? '');
+
   return {
     phones: phones.map((p) => ({ number: p.number, label: p.label ?? '' })),
     email: z.string().catch('').parse(byKey.get('contact.email') ?? ''),
@@ -43,5 +53,9 @@ export async function getSettingsForEdit(): Promise<SettingsForm> {
     geo: geoSchema.nullable().catch(null).parse(byKey.get('contact.geo') ?? null),
     social,
     notifyEmails: emailListSchema.catch([]).parse(byKey.get('leads.notify_emails') ?? []),
+    gtmId: strOf('analytics.gtm_id'),
+    ga4Id: strOf('analytics.ga4_id'),
+    metaPixelId: strOf('tracking.meta_pixel_id'),
+    googleVerification: strOf('seo.google_verification'),
   };
 }
