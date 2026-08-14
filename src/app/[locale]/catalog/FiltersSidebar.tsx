@@ -1,11 +1,14 @@
 import Link from 'next/link';
 import type { CatalogFilters, FacetKey, FacetValue } from '@/lib/catalog';
 import { FACET_KEYS } from '@/lib/catalog';
+import type { CatalogFilterEntry } from '@/lib/catalogConfig';
 import CollectionFacet from './CollectionFacet';
+import FacetDropdown from './FacetDropdown';
 
-// Server-rendered faceted navigation: every filter option is a plain crawlable
-// link that swaps one query param (and resets the page). Colour renders as
-// swatches; Collection gets a client filter island. No other client state.
+// Server-rendered faceted navigation. Which facets appear, their order, and each
+// one's widget come from `entries` (the admin catalog-filter config); the query
+// mapping still lives in catalog.ts. Every option is a plain crawlable link
+// (except the optional dropdown widget). No other client state.
 
 type HrefPatch = Partial<Record<FacetKey | 'q' | 'page' | 'sort' | 'perPage', string | undefined>>;
 
@@ -34,6 +37,7 @@ export default function FiltersSidebar({
   locale,
   filters,
   facets,
+  entries,
   labels,
   clearAllLabel,
   collectionUi,
@@ -41,6 +45,7 @@ export default function FiltersSidebar({
   locale: string;
   filters: CatalogFilters;
   facets: Record<FacetKey, FacetValue[]>;
+  entries: CatalogFilterEntry[];
   labels: Record<FacetKey, string>;
   clearAllLabel: string;
   collectionUi: { showAll: string; showLess: string; filter: string };
@@ -54,7 +59,8 @@ export default function FiltersSidebar({
           {clearAllLabel}
         </Link>
       )}
-      {FACET_KEYS.map((key) => {
+      {entries.map((entry) => {
+        const key = entry.facetKey;
         const values = facets[key];
         if (!values.length) return null;
         const active = filters[key];
@@ -64,11 +70,13 @@ export default function FiltersSidebar({
             {active ? <span className="text-accent"> · 1</span> : null}
           </summary>
         );
+        const open = !!active || entry.defaultOpen;
 
-        // Colour → swatches
-        if (key === 'color') {
+        // Swatches (colour, or any facet the admin picks) — hex when known,
+        // otherwise a two-letter chip.
+        if (entry.widget === 'swatch') {
           return (
-            <details key={key} open={!!active} className="border-b border-line pb-3">
+            <details key={key} open={open} className="border-b border-line pb-3">
               {summary}
               <div className="mt-2 flex flex-wrap gap-2">
                 {values.map((value) => {
@@ -76,7 +84,7 @@ export default function FiltersSidebar({
                   return (
                     <Link
                       key={value.code}
-                      href={catalogHref(locale, filters, { color: isActive ? undefined : value.code })}
+                      href={catalogHref(locale, filters, { [key]: isActive ? undefined : value.code })}
                       title={`${value.name} (${value.count})`}
                       aria-label={`${value.name} (${value.count})`}
                       className={`w-7 h-7 rounded-full border grid place-items-center overflow-hidden ${
@@ -95,19 +103,17 @@ export default function FiltersSidebar({
           );
         }
 
-        // Collection → client filter island
-        if (key === 'collection') {
+        // Searchable client filter island (great for long vocabularies).
+        if (entry.widget === 'collection') {
           const items = values.map((value) => ({
             code: value.code,
             name: value.name,
             count: value.count,
-            href: catalogHref(locale, filters, {
-              collection: active === value.code ? undefined : value.code,
-            }),
+            href: catalogHref(locale, filters, { [key]: active === value.code ? undefined : value.code }),
             isActive: active === value.code,
           }));
           return (
-            <details key={key} open={!!active} className="border-b border-line pb-3">
+            <details key={key} open={open} className="border-b border-line pb-3">
               {summary}
               <CollectionFacet
                 items={items}
@@ -119,9 +125,27 @@ export default function FiltersSidebar({
           );
         }
 
-        // Everything else → plain link list
+        // Compact dropdown — options set the value; "All" clears it.
+        if (entry.widget === 'dropdown') {
+          const items = values.map((value) => ({
+            code: value.code,
+            name: value.name,
+            count: value.count,
+            href: catalogHref(locale, filters, { [key]: value.code }),
+          }));
+          const allHref = catalogHref(locale, filters, { [key]: undefined });
+          const value = active ? catalogHref(locale, filters, { [key]: active }) : allHref;
+          return (
+            <details key={key} open={open} className="border-b border-line pb-3">
+              {summary}
+              <FacetDropdown items={items} allLabel={labels[key]} allHref={allHref} value={value} />
+            </details>
+          );
+        }
+
+        // Default: plain crawlable link list.
         return (
-          <details key={key} open={!!active || key === 'type'} className="border-b border-line pb-3">
+          <details key={key} open={open} className="border-b border-line pb-3">
             {summary}
             <ul className="mt-2 space-y-1 max-h-64 overflow-y-auto pe-2">
               {values.map((value) => {

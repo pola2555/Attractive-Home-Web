@@ -14,6 +14,7 @@ import {
   type FacetKey,
   type CatalogSort,
 } from '@/lib/catalog';
+import { getCatalogFilterConfig } from '@/lib/catalogConfig';
 import { alternates } from '@/lib/seo';
 import ProductCard from '@/components/ProductCard';
 import FiltersSidebar, { catalogHref } from './FiltersSidebar';
@@ -50,16 +51,22 @@ export default async function CatalogPage({
   // Browse tiles only make sense on the unfiltered landing view.
   const showShopBy = !FACET_KEYS.some((k) => filters[k]) && !filters.q;
 
-  const [dict, facets, { total, products }, reps] = await Promise.all([
+  const [dict, facets, { total, products }, reps, filterConfig] = await Promise.all([
     getDictionary(locale, 'catalog'),
     facetValues(locale, filters),
     queryProducts(locale, filters),
     showShopBy ? shopRepImages() : Promise.resolve(null),
+    getCatalogFilterConfig(),
   ]);
 
+  // Labels default to the i18n facet name; the admin config can override each.
   const facetLabels = Object.fromEntries(
     FACET_KEYS.map((key) => [key, t(dict, `facet.${key}`)]),
   ) as Record<FacetKey, string>;
+  const visibleFilters = filterConfig.filter((e) => e.visible);
+  for (const entry of visibleFilters) {
+    if (entry.label) facetLabels[entry.facetKey] = entry.label;
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / filters.perPage));
   const page = Math.min(filters.page, totalPages);
@@ -100,6 +107,7 @@ export default async function CatalogPage({
             locale={locale}
             filters={filters}
             facets={facets}
+            entries={visibleFilters}
             labels={facetLabels}
             clearAllLabel={t(dict, 'clearAll')}
             collectionUi={{
