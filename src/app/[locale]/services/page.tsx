@@ -40,24 +40,31 @@ export default async function ServicesPage({ params }: { params: Promise<{ local
 
   return (
     <section className="bg-bg">
-      <VideoPlayer
-        videoUrl={siteMediaUrl('Main/Services/master.m3u8')}
-        className="absolute inset-0 w-full h-full object-cover"
-        priority
-      />
-      <div className="absolute inset-0 bg-black opacity-50" />
+      {/* Hero — the video is scoped to this full-screen band so it can't stretch
+          behind the services grid below. */}
+      <div className="relative overflow-hidden">
+        <VideoPlayer
+          videoUrl={siteMediaUrl('Main/Services/master.m3u8')}
+          className="absolute inset-0 w-full h-full object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-black opacity-50" />
 
-      <div className="max-w-7xl mx-auto sm:px-8 lg:px-10 2xl:px-0">
-        <div className="flex flex-col min-h-screen">
-          <div className="relative z-1 mb-32 sm:mb-16 grid grid-cols-1 mt-auto">
-            <h1
-              className="text-[2.8rem] 2xl:text-[3.2rem] sm:text-5xl font-bold text-white px-8 sm:px-6 lg:px-12 2xl:px-0 tracking-[3px] uppercase"
-              style={{ lineHeight: '1.5' }}
-            >
-              {t(dict, 'heading')}
-            </h1>
+        <div className="max-w-7xl mx-auto sm:px-8 lg:px-10 2xl:px-0">
+          <div className="flex flex-col min-h-screen">
+            <div className="relative z-1 mb-32 sm:mb-16 grid grid-cols-1 mt-auto">
+              <h1
+                className="text-[2.8rem] 2xl:text-[3.2rem] sm:text-5xl font-bold text-white px-8 sm:px-6 lg:px-12 2xl:px-0 tracking-[3px] uppercase"
+                style={{ lineHeight: '1.5' }}
+              >
+                {t(dict, 'heading')}
+              </h1>
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto sm:px-8 lg:px-10 2xl:px-0">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-16 py-16">
           {services.map((service) => {
             const tr = pickTranslation(service.translations, locale);

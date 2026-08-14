@@ -49,56 +49,61 @@ export default async function PortfolioPage({ params }: { params: Promise<{ loca
   const aluminumHref = `/${locale}/portfolio/aluminum-skirting`;
 
   return (
-    <section className="relative py-20 md:px-12 lg:px-24 bg-bg text-on-media overflow-hidden">
-      <VideoPlayer
-        videoUrl={siteMediaUrl('Main/Portfolio/master.m3u8')}
-        showMuteButton={false}
-        className="absolute inset-0 w-full h-full object-cover"
-        priority
-      />
-      <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
+    <section className="bg-bg text-on-media">
+      {/* Hero — the video is scoped to this full-screen band so it can't stretch
+          behind the whole page (it previously filled the entire section). */}
+      <div className="relative overflow-hidden py-20 md:px-12 lg:px-24">
+        <VideoPlayer
+          videoUrl={siteMediaUrl('Main/Portfolio/master.m3u8')}
+          showMuteButton={false}
+          className="absolute inset-0 w-full h-full object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
 
-      {/* Aluminum-skirting floating promo */}
-      <div className="absolute end-0 opacity-90 top-[40%] px-3 z-[2]">
-        <span className="absolute -top-5 start-0 bg-gray-800 text-white text-xs font-semibold py-1 px-3 rounded-full">
-          {t(dict, 'pioneer')}
-        </span>
-        <Link
-          href={aluminumHref}
-          className="inline-block bg-white text-gray-900 font-bold rounded-md shadow-lg px-3 py-2 text-sm sm:text-xl sm:py-3 sm:px-6 sm:rounded-lg hover:bg-gray-200 transition"
-        >
-          {t(dict, 'exploreAluminum')}
-        </Link>
-      </div>
-
-      <div className="relative z-[1] flex flex-col min-h-screen">
-        <div className="mb-12 mt-auto">
-          <h1 className="text-5xl font-bold mb-2 px-6" style={{ letterSpacing: '2.4px' }}>
-            {t(dict, 'title')}
-          </h1>
-          <p className="text-lg px-6" style={{ letterSpacing: '0.72px' }}>
-            {t(dict, 'objectsCount')}
-          </p>
+        {/* Aluminum-skirting floating promo */}
+        <div className="absolute end-0 opacity-90 top-[40%] px-3 z-[2]">
+          <span className="absolute -top-5 start-0 bg-gray-800 text-white text-xs font-semibold py-1 px-3 rounded-full">
+            {t(dict, 'pioneer')}
+          </span>
+          <Link
+            href={aluminumHref}
+            className="inline-block bg-white text-gray-900 font-bold rounded-md shadow-lg px-3 py-2 text-sm sm:text-xl sm:py-3 sm:px-6 sm:rounded-lg hover:bg-gray-200 transition"
+          >
+            {t(dict, 'exploreAluminum')}
+          </Link>
         </div>
 
-        <div className="max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-x-36 md:border-b border-gray-300 gap-y-8 mb-32 md:mx-auto">
-          {categories.map((category) => {
-            const label = categoryLabel(category.legacyKey, pickTranslation(category.translations, locale)?.title);
-            return (
-              <Link
-                key={category.slug}
-                href={`/${locale}/portfolio/${category.slug}`}
-                className="pb-2 text-xl font-semibold text-center border-b border-white/40 text-white uppercase hover:text-accent transition-colors"
-                aria-label={t(dict, 'viewCategory', { title: label })}
-              >
-                {label}
-              </Link>
-            );
-          })}
+        <div className="relative z-[1] flex flex-col min-h-screen">
+          <div className="mb-12 mt-auto">
+            <h1 className="text-5xl font-bold mb-2 px-6" style={{ letterSpacing: '2.4px' }}>
+              {t(dict, 'title')}
+            </h1>
+            <p className="text-lg px-6" style={{ letterSpacing: '0.72px' }}>
+              {t(dict, 'objectsCount')}
+            </p>
+          </div>
+
+          <div className="max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-x-36 md:border-b border-gray-300 gap-y-8 mb-32 md:mx-auto">
+            {categories.map((category) => {
+              const label = categoryLabel(category.legacyKey, pickTranslation(category.translations, locale)?.title);
+              return (
+                <Link
+                  key={category.slug}
+                  href={`/${locale}/portfolio/${category.slug}`}
+                  className="pb-2 text-xl font-semibold text-center border-b border-white/40 text-white uppercase hover:text-accent transition-colors"
+                  aria-label={t(dict, 'viewCategory', { title: label })}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="relative z-[1] max-w-5xl mx-auto grid gap-24 md:grid-cols-2">
+      {/* Project grid — on the page background, below the hero. */}
+      <div className="max-w-5xl mx-auto grid gap-24 md:grid-cols-2 px-6 md:px-12 lg:px-24 py-20">
         {projects.map((project) => {
           const tr = pickTranslation(project.translations, locale);
           if (!tr) return null;
