@@ -33,6 +33,9 @@ export type SendEmailInput = {
   html: string;
   text?: string;
   replyTo?: string | string[];
+  // Dev-only: when email is unconfigured, this magic link is printed to the
+  // server console so verify/reset flows can be tested locally without SES.
+  devLink?: string;
 };
 export type SendEmailResult = { ok: boolean; skipped?: boolean; id?: string; error?: string };
 
@@ -45,7 +48,11 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   const to = toList(input.to);
   if (to.length === 0) return { ok: false, error: 'no recipients' };
   if (!cfg.enabled) {
-    console.warn(`[email] EMAIL_FROM not set — skipping "${input.subject}" to ${to.join(', ')}`);
+    let line = `[email] EMAIL_FROM not set — skipping "${input.subject}" to ${to.join(', ')}`;
+    if (input.devLink && process.env.NODE_ENV !== 'production') {
+      line += `\n[email:dev] open this link to continue → ${input.devLink}`;
+    }
+    console.warn(line);
     return { ok: false, skipped: true };
   }
   try {
@@ -127,7 +134,7 @@ export function sendStaffPasswordResetEmail(opts: {
 <p style="color:#8a8175;font-size:13px;">If you didn't request this, you can safely ignore this email — your password won't change.</p>`,
   );
   const text = `Reset your ${BRAND} dashboard password (valid ${opts.expiresInHours}h):\n${url}\n\nIf you didn't request this, ignore this email.`;
-  return sendEmail({ to: opts.to, subject: `Reset your ${BRAND} dashboard password`, html, text });
+  return sendEmail({ to: opts.to, subject: `Reset your ${BRAND} dashboard password`, html, text, devLink: url });
 }
 
 export function sendCustomerVerificationEmail(opts: {
@@ -146,7 +153,7 @@ export function sendCustomerVerificationEmail(opts: {
 <p style="color:#8a8175;font-size:13px;">If you didn't create this account, you can ignore this email.</p>`,
   );
   const text = `Confirm your ${BRAND} email address (valid ${opts.expiresInHours}h):\n${url}\n\nIf you didn't create this account, ignore this email.`;
-  return sendEmail({ to: opts.to, subject: `Confirm your ${BRAND} email address`, html, text });
+  return sendEmail({ to: opts.to, subject: `Confirm your ${BRAND} email address`, html, text, devLink: url });
 }
 
 export function sendCustomerPasswordResetEmail(opts: {
@@ -165,7 +172,7 @@ export function sendCustomerPasswordResetEmail(opts: {
 <p style="color:#8a8175;font-size:13px;">If you didn't request this, you can safely ignore this email — your password won't change.</p>`,
   );
   const text = `Reset your ${BRAND} password (valid ${opts.expiresInHours}h):\n${url}\n\nIf you didn't request this, ignore this email.`;
-  return sendEmail({ to: opts.to, subject: `Reset your ${BRAND} password`, html, text });
+  return sendEmail({ to: opts.to, subject: `Reset your ${BRAND} password`, html, text, devLink: url });
 }
 
 export function sendLeadNotificationEmail(opts: {
