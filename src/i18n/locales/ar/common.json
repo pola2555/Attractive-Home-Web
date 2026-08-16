@@ -6,7 +6,9 @@
     "catalog": "الكتالوج",
     "visualizer": "المعاينة",
     "contacts": "تواصل معنا",
-    "services": "خدماتنا"
+    "services": "خدماتنا",
+    "signIn": "تسجيل الدخول",
+    "account": "حسابي"
   },
   "language": {
     "switchToArabic": "العربية",

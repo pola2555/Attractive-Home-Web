@@ -6,7 +6,9 @@
     "catalog": "КАТАЛОГ",
     "visualizer": "ВИЗУАЛИЗАТОР",
     "contacts": "КОНТАКТЫ",
-    "services": "УСЛУГИ"
+    "services": "УСЛУГИ",
+    "signIn": "ВОЙТИ",
+    "account": "АККАУНТ"
   },
   "language": {
     "switchToArabic": "العربية",

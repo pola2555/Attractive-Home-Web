@@ -6,7 +6,9 @@
     "catalog": "CATALOGUE",
     "visualizer": "VISUALISEUR",
     "contacts": "CONTACT",
-    "services": "SERVICES"
+    "services": "SERVICES",
+    "signIn": "CONNEXION",
+    "account": "COMPTE"
   },
   "language": {
     "switchToArabic": "العربية",

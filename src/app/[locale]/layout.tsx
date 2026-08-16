@@ -84,6 +84,8 @@ export default async function LocaleLayout({
     catalog: t(common, 'nav.catalog'),
     contacts: t(common, 'nav.contacts'),
     services: t(common, 'nav.services'),
+    signIn: t(common, 'nav.signIn'),
+    account: t(common, 'nav.account'),
     languageLabel: t(common, 'language.label'),
     languageNames: {
       en: t(common, 'language.en'),
