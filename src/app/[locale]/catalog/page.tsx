@@ -18,6 +18,7 @@ import { getCatalogFilterConfig } from '@/lib/catalogConfig';
 import { alternates } from '@/lib/seo';
 import ProductCard from '@/components/ProductCard';
 import FiltersSidebar, { catalogHref } from './FiltersSidebar';
+import CatalogFilters from './CatalogFilters';
 import ShopByTiles from './ShopByTiles';
 
 export async function generateMetadata({
@@ -67,6 +68,7 @@ export default async function CatalogPage({
   for (const entry of visibleFilters) {
     if (entry.label) facetLabels[entry.facetKey] = entry.label;
   }
+  const activeCount = FACET_KEYS.filter((k) => filters[k]).length;
 
   const totalPages = Math.max(1, Math.ceil(total / filters.perPage));
   const page = Math.min(filters.page, totalPages);
@@ -103,19 +105,26 @@ export default async function CatalogPage({
         </form>
 
         <div className="grid grid-cols-1 lg:grid-cols-[16rem_1fr] gap-10">
-          <FiltersSidebar
-            locale={locale}
-            filters={filters}
-            facets={facets}
-            entries={visibleFilters}
-            labels={facetLabels}
-            clearAllLabel={t(dict, 'clearAll')}
-            collectionUi={{
-              showAll: t(dict, 'showAll'),
-              showLess: t(dict, 'showLess'),
-              filter: t(dict, 'filterPlaceholder'),
-            }}
-          />
+          <CatalogFilters
+            filtersLabel={t(dict, 'filters')}
+            closeLabel={t(dict, 'close')}
+            viewResultsLabel={t(dict, 'viewResults', { count: total })}
+            activeCount={activeCount}
+          >
+            <FiltersSidebar
+              locale={locale}
+              filters={filters}
+              facets={facets}
+              entries={visibleFilters}
+              labels={facetLabels}
+              clearAllLabel={t(dict, 'clearAll')}
+              collectionUi={{
+                showAll: t(dict, 'showAll'),
+                showLess: t(dict, 'showLess'),
+                filter: t(dict, 'filterPlaceholder'),
+              }}
+            />
+          </CatalogFilters>
 
           <div>
             {showShopBy && reps && (
