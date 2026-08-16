@@ -19,6 +19,53 @@ function optionLabel(o: FacetOption): string {
   return o.isActive ? base : `${base} — inactive`;
 }
 
+// A small "?" affordance next to a field label. The explanation pops on hover or
+// keyboard focus (no JS state — pure group-hover/focus-within), so it works on
+// touch via focus too.
+function InfoHint({ label, width = 'w-72', children }: { label: string; width?: string; children: React.ReactNode }) {
+  return (
+    <span className="group/hint relative inline-flex align-middle">
+      <button
+        type="button"
+        aria-label={`What is ${label}?`}
+        className="ms-1.5 inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-line-strong text-[10px] font-semibold leading-none text-muted transition-colors hover:border-accent hover:text-heading focus:outline-none focus:ring-2 focus:ring-accent"
+      >
+        ?
+      </button>
+      <span
+        role="tooltip"
+        className={`pointer-events-none invisible absolute start-0 top-full z-30 mt-2 ${width} rounded-lg border border-line-strong bg-surface p-3 text-xs font-normal leading-relaxed text-ink opacity-0 shadow-xl transition group-hover/hint:visible group-hover/hint:opacity-100 group-focus-within/hint:visible group-focus-within/hint:opacity-100`}
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
+// A worked example of how the meta fields render as a Google search result. The
+// line the current field controls is ringed so it's obvious which is which.
+function MetaExample({ highlight }: { highlight: 'title' | 'description' }) {
+  return (
+    <span className="mt-2 block rounded-md border border-line bg-bg-deep p-2">
+      <span className="block truncate text-[11px] text-muted">attractivehome.ae › catalog › calacatta-gold</span>
+      <span
+        className={`block truncate text-[13px] ${
+          highlight === 'title' ? 'rounded bg-accent/10 px-0.5 font-medium text-sky-400 ring-1 ring-sky-400/50' : 'text-sky-400/70'
+        }`}
+      >
+        Calacatta Gold Porcelain Slab 120×278 | Attractive Home
+      </span>
+      <span
+        className={`mt-0.5 block text-[11px] ${
+          highlight === 'description' ? 'rounded bg-accent/10 px-0.5 text-ink ring-1 ring-accent/50' : 'text-muted'
+        }`}
+      >
+        Large-format Calacatta Gold porcelain with soft grey veining — ideal for feature walls, worktops and floors.
+      </span>
+    </span>
+  );
+}
+
 function Text({
   name,
   label,
@@ -29,6 +76,7 @@ function Text({
   dir,
   step,
   min,
+  hint,
 }: {
   name: string;
   label: string;
@@ -39,11 +87,13 @@ function Text({
   dir?: 'ltr' | 'rtl';
   step?: string;
   min?: string;
+  hint?: React.ReactNode;
 }) {
   return (
     <label className="block">
       <span className={labelCls}>
         {label} {required && <span className="text-accent">*</span>}
+        {hint}
       </span>
       <input
         name={name}
@@ -66,17 +116,20 @@ function Select({
   options,
   defaultValue,
   required,
+  hint,
 }: {
   name: string;
   label: string;
   options: FacetOption[];
   defaultValue?: string;
   required?: boolean;
+  hint?: React.ReactNode;
 }) {
   return (
     <label className="block">
       <span className={labelCls}>
         {label} {required && <span className="text-accent">*</span>}
+        {hint}
       </span>
       <select name={name} defaultValue={defaultValue ?? ''} required={required} className={inputCls}>
         {!required && <option value="">— none —</option>}
@@ -159,8 +212,34 @@ export default function ProductForm({
               <Text name={`description_${locale}`} label="Description" defaultValue={tr?.description} dir={dirOf(locale)} />
               <Text name={`usageNotes_${locale}`} label="Usage notes" defaultValue={tr?.usageNotes} dir={dirOf(locale)} />
               <div className="grid grid-cols-2 gap-3">
-                <Text name={`metaTitle_${locale}`} label="Meta title (SEO)" defaultValue={tr?.metaTitle} dir={dirOf(locale)} />
-                <Text name={`metaDescription_${locale}`} label="Meta description (SEO)" defaultValue={tr?.metaDescription} dir={dirOf(locale)} />
+                <Text
+                  name={`metaTitle_${locale}`}
+                  label="Meta title (SEO)"
+                  defaultValue={tr?.metaTitle}
+                  dir={dirOf(locale)}
+                  hint={
+                    <InfoHint label="Meta title" width="w-80">
+                      The headline shown in Google results and the browser tab — it isn&apos;t printed on the page
+                      itself. Aim for ~50–60 characters, lead with the product name, and add a key material or size.
+                      Leave blank to fall back to the product name.
+                      <MetaExample highlight="title" />
+                    </InfoHint>
+                  }
+                />
+                <Text
+                  name={`metaDescription_${locale}`}
+                  label="Meta description (SEO)"
+                  defaultValue={tr?.metaDescription}
+                  dir={dirOf(locale)}
+                  hint={
+                    <InfoHint label="Meta description" width="w-80">
+                      The grey summary under the title in Google results. Aim for ~150–160 characters describing the
+                      product to earn the click. It doesn&apos;t affect ranking; leave blank and Google writes its own
+                      snippet.
+                      <MetaExample highlight="description" />
+                    </InfoHint>
+                  }
+                />
               </div>
             </div>
           );
@@ -184,7 +263,21 @@ export default function ProductForm({
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-heading">Classification</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <Select name="sourceId" label="Source" options={facets.sources} defaultValue={initial?.sourceId} required />
+          <Select
+            name="sourceId"
+            label="Source"
+            options={facets.sources}
+            defaultValue={initial?.sourceId}
+            required
+            hint={
+              <InfoHint label="Source">
+                Which inventory this product belongs to. <strong className="text-heading">Attractive Home</strong> = our
+                own product (images served from our site bucket, badged as our brand).{' '}
+                <strong className="text-heading">Catalog</strong> = an imported supplier material (images from the
+                supplier bucket). Required — it decides where images load from and how the product is branded.
+              </InfoHint>
+            }
+          />
           <Select name="typeId" label="Type" options={facets.types} defaultValue={initial?.typeId} />
           <Select name="materialId" label="Material" options={facets.materials} defaultValue={initial?.materialId} />
           <Select name="lookId" label="Look" options={facets.looks} defaultValue={initial?.lookId} />
