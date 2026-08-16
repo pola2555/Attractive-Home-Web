@@ -5,32 +5,48 @@ import type { CatalogFilterEntry } from '@/lib/catalogConfig';
 import CollectionFacet from './CollectionFacet';
 import FacetDropdown from './FacetDropdown';
 
-// Server-rendered faceted navigation. Which facets appear, their order, and each
-// one's widget come from `entries` (the admin catalog-filter config); the query
-// mapping still lives in catalog.ts. Every option is a plain crawlable link
-// (except the optional dropdown widget). No other client state.
+// Multi-select faceted navigation. Selecting several values inside one facet
+// unions them (OR); different facets intersect (AND). Every option is a plain
+// crawlable link that toggles one value in/out of that facet's set (and resets
+// the page). Which facets appear, their order, and each widget come from the
+// admin `entries` config; the query mapping lives in catalog.ts.
 
-type HrefPatch = Partial<Record<FacetKey | 'q' | 'page' | 'sort' | 'perPage', string | undefined>>;
+type HrefPatch = { q?: string; page?: string; sort?: string; perPage?: string } & Partial<
+  Record<FacetKey, string[] | undefined>
+>;
 
 export function catalogHref(locale: string, filters: CatalogFilters, patch: HrefPatch): string {
   const params = new URLSearchParams();
-  const merged: Record<string, string | undefined> = {
-    q: filters.q,
-    sort: filters.sort === 'featured' ? undefined : filters.sort,
-    perPage: filters.perPage === 48 ? undefined : String(filters.perPage),
-    ...Object.fromEntries(FACET_KEYS.map((k) => [k, filters[k]])),
-    ...patch,
-  };
-  // Keep the URL canonical — never serialise a default sort/page-size.
-  if (merged.sort === 'featured') merged.sort = undefined;
-  if (merged.perPage === '48') merged.perPage = undefined;
 
-  for (const key of ['q', 'sort', 'perPage', ...FACET_KEYS]) {
-    if (merged[key]) params.set(key, merged[key] as string);
+  // Facets: multi-valued, serialised as comma-joined codes. A patched key wins;
+  // otherwise carry the current selection forward.
+  for (const key of FACET_KEYS) {
+    const values = key in patch ? patch[key] : filters[key];
+    if (values && values.length) params.set(key, values.join(','));
   }
+
+  const q = 'q' in patch ? patch.q : filters.q;
+  if (q) params.set('q', q);
+
+  const sort = 'sort' in patch ? patch.sort : filters.sort;
+  if (sort && sort !== 'featured') params.set('sort', sort);
+
+  const perPage = 'perPage' in patch ? patch.perPage : String(filters.perPage);
+  if (perPage && perPage !== '48') params.set('perPage', perPage);
+
+  // Any filter change resets to page 1 (page is only kept when explicitly patched).
   if (patch.page && patch.page !== '1') params.set('page', patch.page);
+
   const qs = params.toString();
   return `/${locale}/catalog${qs ? `?${qs}` : ''}`;
+}
+
+// Add/remove one value from a facet's current set.
+function toggleValue(current: string[] | undefined, code: string): string[] {
+  const set = new Set(current ?? []);
+  if (set.has(code)) set.delete(code);
+  else set.add(code);
+  return [...set];
 }
 
 export default function FiltersSidebar({
@@ -50,7 +66,7 @@ export default function FiltersSidebar({
   clearAllLabel: string;
   collectionUi: { showAll: string; showLess: string; filter: string };
 }) {
-  const hasActive = FACET_KEYS.some((k) => filters[k]) || !!filters.q;
+  const hasActive = FACET_KEYS.some((k) => filters[k]?.length) || !!filters.q;
 
   return (
     <aside className="space-y-4">
@@ -64,27 +80,27 @@ export default function FiltersSidebar({
         const values = facets[key];
         if (!values.length) return null;
         const active = filters[key];
+        const activeCount = active?.length ?? 0;
         const summary = (
           <summary className="cursor-pointer select-none text-heading font-semibold py-1">
             {labels[key]}
-            {active ? <span className="text-accent"> · 1</span> : null}
+            {activeCount > 0 ? <span className="text-accent"> · {activeCount}</span> : null}
           </summary>
         );
-        const open = !!active || entry.defaultOpen;
+        const open = activeCount > 0 || entry.defaultOpen;
 
-        // Swatches (colour, or any facet the admin picks) — hex when known,
-        // otherwise a two-letter chip.
+        // Swatches (multi-select toggle).
         if (entry.widget === 'swatch') {
           return (
             <details key={key} open={open} className="border-b border-line pb-3">
               {summary}
               <div className="mt-2 flex flex-wrap gap-2">
                 {values.map((value) => {
-                  const isActive = active === value.code;
+                  const isActive = active?.includes(value.code) ?? false;
                   return (
                     <Link
                       key={value.code}
-                      href={catalogHref(locale, filters, { [key]: isActive ? undefined : value.code })}
+                      href={catalogHref(locale, filters, { [key]: toggleValue(active, value.code) })}
                       title={`${value.name} (${value.count})`}
                       aria-label={`${value.name} (${value.count})`}
                       className={`w-7 h-7 rounded-full border grid place-items-center overflow-hidden ${
@@ -103,14 +119,14 @@ export default function FiltersSidebar({
           );
         }
 
-        // Searchable client filter island (great for long vocabularies).
+        // Searchable client filter island (multi-select).
         if (entry.widget === 'collection') {
           const items = values.map((value) => ({
             code: value.code,
             name: value.name,
             count: value.count,
-            href: catalogHref(locale, filters, { [key]: active === value.code ? undefined : value.code }),
-            isActive: active === value.code,
+            href: catalogHref(locale, filters, { [key]: toggleValue(active, value.code) }),
+            isActive: active?.includes(value.code) ?? false,
           }));
           return (
             <details key={key} open={open} className="border-b border-line pb-3">
@@ -125,16 +141,17 @@ export default function FiltersSidebar({
           );
         }
 
-        // Compact dropdown — options set the value; "All" clears it.
+        // Compact dropdown — single-select set; "All" clears.
         if (entry.widget === 'dropdown') {
           const items = values.map((value) => ({
             code: value.code,
             name: value.name,
             count: value.count,
-            href: catalogHref(locale, filters, { [key]: value.code }),
+            href: catalogHref(locale, filters, { [key]: [value.code] }),
           }));
           const allHref = catalogHref(locale, filters, { [key]: undefined });
-          const value = active ? catalogHref(locale, filters, { [key]: active }) : allHref;
+          const first = active?.[0];
+          const value = first ? catalogHref(locale, filters, { [key]: [first] }) : allHref;
           return (
             <details key={key} open={open} className="border-b border-line pb-3">
               {summary}
@@ -143,22 +160,30 @@ export default function FiltersSidebar({
           );
         }
 
-        // Default: plain crawlable link list.
+        // Default: checkbox list (multi-select).
         return (
           <details key={key} open={open} className="border-b border-line pb-3">
             {summary}
             <ul className="mt-2 space-y-1 max-h-64 overflow-y-auto pe-2">
               {values.map((value) => {
-                const isActive = active === value.code;
+                const isActive = active?.includes(value.code) ?? false;
                 return (
                   <li key={value.code}>
                     <Link
-                      href={catalogHref(locale, filters, { [key]: isActive ? undefined : value.code })}
-                      className={`flex justify-between gap-2 text-sm rounded px-2 py-1 transition-colors ${
+                      href={catalogHref(locale, filters, { [key]: toggleValue(active, value.code) })}
+                      className={`flex items-center gap-2 text-sm rounded px-2 py-1 transition-colors ${
                         isActive ? 'bg-accent-2/15 text-heading font-semibold' : 'text-ink hover:bg-accent-2/10'
                       }`}
                     >
-                      <span className="truncate">{value.name}</span>
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        readOnly
+                        tabIndex={-1}
+                        aria-hidden="true"
+                        className="pointer-events-none w-4 h-4 shrink-0 accent-accent"
+                      />
+                      <span className="truncate flex-1">{value.name}</span>
                       <span className="text-muted shrink-0">{value.count}</span>
                     </Link>
                   </li>

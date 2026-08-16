@@ -28,7 +28,9 @@ export const FACET_KEYS = [
 ] as const;
 export type FacetKey = (typeof FACET_KEYS)[number];
 
-export type CatalogFilters = Partial<Record<FacetKey, string>> & {
+// Each facet holds a SET of selected values: multiple values within one facet
+// are OR'd (union); different facets are AND'd (intersection).
+export type CatalogFilters = Partial<Record<FacetKey, string[]>> & {
   q?: string;
   page: number;
   sort: CatalogSort;
@@ -40,6 +42,15 @@ export function parseCatalogFilters(
 ): CatalogFilters {
   const first = (v: string | string[] | undefined) =>
     (Array.isArray(v) ? v[0] : v)?.trim() || undefined;
+  // A facet param may repeat (?type=a&type=b) or be comma-joined (?type=a,b).
+  const many = (v: string | string[] | undefined): string[] => {
+    const raw = Array.isArray(v) ? v : v != null ? [v] : [];
+    const flat = raw
+      .flatMap((s) => String(s).split(','))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return Array.from(new Set(flat)).slice(0, 40); // dedupe + cap
+  };
 
   const sort: CatalogSort = first(searchParams.sort) === 'az' ? 'az' : 'featured';
   const perPageRaw = Number(first(searchParams.perPage));
@@ -55,8 +66,8 @@ export function parseCatalogFilters(
   const q = first(searchParams.q);
   if (q) filters.q = q.slice(0, 100);
   for (const key of FACET_KEYS) {
-    const value = first(searchParams[key]);
-    if (value) filters[key] = value;
+    const values = many(searchParams[key]);
+    if (values.length) filters[key] = values;
   }
   return filters;
 }
@@ -77,18 +88,19 @@ export function catalogWhere(
       ],
     });
   }
+  // Values within one facet are OR'd via `IN`; the facets are AND'd together.
   const facet = (key: FacetKey, clause: Prisma.ProductWhereInput) => {
-    if (filters[key] && exclude !== key) and.push(clause);
+    if (filters[key]?.length && exclude !== key) and.push(clause);
   };
-  facet('type', { type: { code: filters.type } });
-  facet('material', { material: { code: filters.material } });
-  facet('look', { look: { code: filters.look } });
-  facet('color', { color: { code: filters.color } });
-  facet('collection', { collection: { code: filters.collection } });
-  facet('brand', { brand: { code: filters.brand } });
-  facet('source', { source: { code: filters.source } });
-  facet('application', { applications: { some: { application: { code: filters.application } } } });
-  facet('size', { sizeLabel: filters.size });
+  facet('type', { type: { code: { in: filters.type } } });
+  facet('material', { material: { code: { in: filters.material } } });
+  facet('look', { look: { code: { in: filters.look } } });
+  facet('color', { color: { code: { in: filters.color } } });
+  facet('collection', { collection: { code: { in: filters.collection } } });
+  facet('brand', { brand: { code: { in: filters.brand } } });
+  facet('source', { source: { code: { in: filters.source } } });
+  facet('application', { applications: { some: { application: { code: { in: filters.application } } } } });
+  facet('size', { sizeLabel: { in: filters.size } });
   return { isPublished: true, AND: and };
 }
 
@@ -240,25 +252,31 @@ function whereSql(filters: CatalogFilters): Prisma.Sql {
       Prisma.sql`(p.code ILIKE ${like} OR EXISTS (SELECT 1 FROM product_translations t WHERE t.product_id = p.id AND t.name ILIKE ${like}))`,
     );
   }
-  if (filters.type)
-    conds.push(Prisma.sql`p.type_id = (SELECT id FROM product_types WHERE code = ${filters.type})`);
-  if (filters.material)
-    conds.push(Prisma.sql`p.material_id = (SELECT id FROM materials WHERE code = ${filters.material})`);
-  if (filters.look)
-    conds.push(Prisma.sql`p.look_id = (SELECT id FROM looks WHERE code = ${filters.look})`);
-  if (filters.color)
-    conds.push(Prisma.sql`p.color_id = (SELECT id FROM colors WHERE code = ${filters.color})`);
-  if (filters.collection)
-    conds.push(Prisma.sql`p.collection_id = (SELECT id FROM collections WHERE code = ${filters.collection})`);
-  if (filters.brand)
-    conds.push(Prisma.sql`p.brand_id = (SELECT id FROM brands WHERE code = ${filters.brand})`);
-  if (filters.source)
-    conds.push(Prisma.sql`p.source_id = (SELECT id FROM sources WHERE code = ${filters.source})`);
-  if (filters.application)
+  if (filters.type?.length)
     conds.push(
-      Prisma.sql`EXISTS (SELECT 1 FROM product_applications pa JOIN applications a ON a.id = pa.application_id WHERE pa.product_id = p.id AND a.code = ${filters.application})`,
+      Prisma.sql`p.type_id IN (SELECT id FROM product_types WHERE code IN (${Prisma.join(filters.type)}))`,
     );
-  if (filters.size) conds.push(Prisma.sql`p.size_label = ${filters.size}`);
+  if (filters.material?.length)
+    conds.push(
+      Prisma.sql`p.material_id IN (SELECT id FROM materials WHERE code IN (${Prisma.join(filters.material)}))`,
+    );
+  if (filters.look?.length)
+    conds.push(Prisma.sql`p.look_id IN (SELECT id FROM looks WHERE code IN (${Prisma.join(filters.look)}))`);
+  if (filters.color?.length)
+    conds.push(Prisma.sql`p.color_id IN (SELECT id FROM colors WHERE code IN (${Prisma.join(filters.color)}))`);
+  if (filters.collection?.length)
+    conds.push(
+      Prisma.sql`p.collection_id IN (SELECT id FROM collections WHERE code IN (${Prisma.join(filters.collection)}))`,
+    );
+  if (filters.brand?.length)
+    conds.push(Prisma.sql`p.brand_id IN (SELECT id FROM brands WHERE code IN (${Prisma.join(filters.brand)}))`);
+  if (filters.source?.length)
+    conds.push(Prisma.sql`p.source_id IN (SELECT id FROM sources WHERE code IN (${Prisma.join(filters.source)}))`);
+  if (filters.application?.length)
+    conds.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM product_applications pa JOIN applications a ON a.id = pa.application_id WHERE pa.product_id = p.id AND a.code IN (${Prisma.join(filters.application)}))`,
+    );
+  if (filters.size?.length) conds.push(Prisma.sql`p.size_label IN (${Prisma.join(filters.size)})`);
   return Prisma.join(conds, ' AND ');
 }
 

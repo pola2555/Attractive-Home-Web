@@ -53,7 +53,7 @@ export default function ShopByTiles({
               }}
             >
               {values.map((value) => {
-                const href = catalogHref(locale, filters, { [key]: value.code });
+                const href = catalogHref(locale, filters, { [key]: [value.code] });
                 if (color) {
                   return (
                     <Link

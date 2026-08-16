@@ -50,7 +50,7 @@ export default async function CatalogPage({
   if (!isLocale(locale)) notFound();
   const filters = parseCatalogFilters(await searchParams);
   // Browse tiles only make sense on the unfiltered landing view.
-  const showShopBy = !FACET_KEYS.some((k) => filters[k]) && !filters.q;
+  const showShopBy = !FACET_KEYS.some((k) => filters[k]?.length) && !filters.q;
 
   const [dict, facets, { total, products }, reps, filterConfig] = await Promise.all([
     getDictionary(locale, 'catalog'),
@@ -88,9 +88,10 @@ export default async function CatalogPage({
 
         {/* Search — plain GET form; active filters ride along as hidden inputs */}
         <form method="get" className="mb-8 max-w-xl">
-          {FACET_KEYS.map((key) =>
-            filters[key] ? <input key={key} type="hidden" name={key} value={filters[key]} /> : null,
-          )}
+          {FACET_KEYS.map((key) => {
+            const vals = filters[key];
+            return vals?.length ? <input key={key} type="hidden" name={key} value={vals.join(',')} /> : null;
+          })}
           {filters.sort !== 'featured' && <input type="hidden" name="sort" value={filters.sort} />}
           {filters.perPage !== CATALOG_PAGE_SIZE && (
             <input type="hidden" name="perPage" value={filters.perPage} />

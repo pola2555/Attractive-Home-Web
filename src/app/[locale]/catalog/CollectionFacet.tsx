@@ -41,11 +41,19 @@ export default function CollectionFacet({
           <li key={v.code}>
             <Link
               href={v.href}
-              className={`flex justify-between gap-2 text-sm rounded px-2 py-1 transition-colors ${
+              className={`flex items-center gap-2 text-sm rounded px-2 py-1 transition-colors ${
                 v.isActive ? 'bg-accent-2/15 text-heading font-semibold' : 'text-ink hover:bg-accent-2/10'
               }`}
             >
-              <span className="truncate">{v.name}</span>
+              <input
+                type="checkbox"
+                checked={v.isActive}
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+                className="pointer-events-none w-4 h-4 shrink-0 accent-accent"
+              />
+              <span className="truncate flex-1">{v.name}</span>
               <span className="text-muted shrink-0">{v.count}</span>
             </Link>
           </li>
