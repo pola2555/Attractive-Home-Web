@@ -8,7 +8,8 @@
     "contacts": "CONTACTS",
     "services": "SERVICES",
     "signIn": "SIGN IN",
-    "account": "ACCOUNT"
+    "account": "ACCOUNT",
+    "dashboard": "DASHBOARD"
   },
   "language": {
     "switchToArabic": "العربية",

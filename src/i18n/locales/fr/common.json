@@ -8,7 +8,8 @@
     "contacts": "CONTACT",
     "services": "SERVICES",
     "signIn": "CONNEXION",
-    "account": "COMPTE"
+    "account": "COMPTE",
+    "dashboard": "TABLEAU DE BORD"
   },
   "language": {
     "switchToArabic": "العربية",

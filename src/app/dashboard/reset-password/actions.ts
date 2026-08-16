@@ -6,6 +6,7 @@ import argon2 from 'argon2';
 import { prisma } from '@/lib/prisma';
 import { consumeStaffPasswordResetToken } from '@/lib/authTokens';
 import { writeAudit } from '@/lib/audit';
+import { DEFAULT_LOCALE } from '@/i18n/config';
 
 export type ResetState = { error?: string };
 
@@ -38,5 +39,5 @@ export async function resetStaffPassword(_prev: ResetState, formData: FormData):
     action: 'update',
     diff: { password: { from: null, to: 'reset' } },
   });
-  redirect('/dashboard/login?reset=1');
+  redirect(`/${DEFAULT_LOCALE}/account/sign-in?reset=1`);
 }

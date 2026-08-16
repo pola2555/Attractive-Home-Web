@@ -19,6 +19,7 @@ export type NavbarLabels = {
   services: string;
   signIn: string;
   account: string;
+  dashboard: string;
   languageLabel: string;
   languageNames: Record<Locale, string>;
 };
@@ -40,6 +41,20 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
   const pathname = usePathname() ?? `/${locale}`;
   // Client-side auth flag (hydrates after mount, so the page stays static).
   const { authed } = useFavorites();
+  // Staff-session check (also client-side) → controls the Dashboard link.
+  const [canDashboard, setCanDashboard] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/dashboard/session', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d) setCanDashboard(Boolean(d.canAccess));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const isCatalog = pathname.startsWith(`/${locale}/catalog`);
   const isCatalogRef = useRef(isCatalog);
@@ -91,16 +106,28 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
     return `/${code}${rest}`;
   };
 
-  // Account entry: links to sign-in when logged out, to the account page when
-  // logged in (the label/target reconcile after hydration).
+  // Account / dashboard entry. Staff (dashboard access) see a Dashboard link;
+  // customers see Account; everyone else sees Sign in. All reconcile after the
+  // client auth checks hydrate.
+  const showAccount = authed;
+  const showSignIn = !authed && !canDashboard;
   const accountHref = href(authed ? '/account' : '/account/sign-in');
   const accountLabel = authed ? labels.account : labels.signIn;
   const accountActive = pathname.startsWith(href('/account'));
+  const dashboardActive = pathname.startsWith('/dashboard');
 
   const AccountIcon = (
     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
       <circle cx="12" cy="8" r="4" />
       <path strokeLinecap="round" d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6" />
+    </svg>
+  );
+  const DashboardIcon = (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
     </svg>
   );
 
@@ -125,14 +152,26 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
             {labels[item.key]}
           </Link>
         ))}
-        <Link
-          href={accountHref}
-          aria-label={accountLabel}
-          className={`flex items-center gap-1.5 hover:text-accent ${accountActive ? 'text-heading' : 'text-ink'}`}
-        >
-          {AccountIcon}
-          <span>{accountLabel}</span>
-        </Link>
+        {canDashboard && (
+          <Link
+            href="/dashboard"
+            aria-label={labels.dashboard}
+            className={`flex items-center gap-1.5 hover:text-accent ${dashboardActive ? 'text-heading' : 'text-ink'}`}
+          >
+            {DashboardIcon}
+            <span>{labels.dashboard}</span>
+          </Link>
+        )}
+        {(showAccount || showSignIn) && (
+          <Link
+            href={accountHref}
+            aria-label={accountLabel}
+            className={`flex items-center gap-1.5 hover:text-accent ${accountActive ? 'text-heading' : 'text-ink'}`}
+          >
+            {AccountIcon}
+            <span>{accountLabel}</span>
+          </Link>
+        )}
         <div className="relative" ref={langRef}>
           <button
             onClick={() => setLangOpen((v) => !v)}
@@ -197,14 +236,26 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
               {labels[item.key]}
             </Link>
           ))}
-          <Link
-            href={accountHref}
-            onClick={() => setMenuOpen(false)}
-            className={`flex items-center gap-2 hover:text-accent ${accountActive ? 'text-heading' : 'text-ink'}`}
-          >
-            {AccountIcon}
-            <span>{accountLabel}</span>
-          </Link>
+          {canDashboard && (
+            <Link
+              href="/dashboard"
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-2 hover:text-accent ${dashboardActive ? 'text-heading' : 'text-ink'}`}
+            >
+              {DashboardIcon}
+              <span>{labels.dashboard}</span>
+            </Link>
+          )}
+          {(showAccount || showSignIn) && (
+            <Link
+              href={accountHref}
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-2 hover:text-accent ${accountActive ? 'text-heading' : 'text-ink'}`}
+            >
+              {AccountIcon}
+              <span>{accountLabel}</span>
+            </Link>
+          )}
           <div className="flex items-center gap-2 flex-wrap justify-center px-4">
             {LOCALES.map((code) => (
               <Link
