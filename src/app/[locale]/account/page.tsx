@@ -31,7 +31,7 @@ export default async function AccountPage({
   ]);
 
   return (
-    <section className="max-w-7xl mx-auto px-4 sm:px-8 py-16 bg-bg min-h-[70vh]">
+    <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-28 sm:pt-32 pb-16 bg-bg min-h-[70vh]">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
         <h1 className="text-3xl font-bold text-heading">{t(dict, 'title')}</h1>
         <form action={signOutCustomer.bind(null, locale)}>
