@@ -28,8 +28,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen flex">
       <aside className="w-56 shrink-0 bg-bg-deep border-e border-line p-6 flex flex-col gap-6">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/Logo EN.webp" alt="Attractive Home" className="h-12 w-auto self-start" />
+        <Link href="/" className="self-start" title="Go to website" aria-label="Go to website">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/Logo EN.webp" alt="Attractive Home" className="h-12 w-auto" />
+        </Link>
         <nav className="flex flex-col gap-2">
           {nav.map((item) => (
             <Link

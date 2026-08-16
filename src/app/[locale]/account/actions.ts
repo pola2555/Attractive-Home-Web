@@ -100,9 +100,11 @@ export async function signUpCustomer(
 // ---------------------------------------------------------------------------
 
 // Single sign-in entry point for the whole site. If the credentials belong to a
-// staff account, the STAFF (dashboard) session is established and we send them to
-// the dashboard; otherwise it's a normal customer sign-in. The two Auth.js
-// instances stay isolated (distinct cookies) — this just unifies the form.
+// staff account, the STAFF (dashboard) session is established and we return them
+// to the public site — the navbar then reveals a "Dashboard" link — rather than
+// forcing them into the dashboard. Otherwise it's a normal customer sign-in. The
+// two Auth.js instances stay isolated (distinct cookies) — this just unifies the
+// form.
 export async function signInCustomer(
   locale: string,
   _prev: AuthState,
@@ -112,8 +114,9 @@ export async function signInCustomer(
   const password = field(formData, 'password');
   if (!email || !password) return { error: 'Enter your email and password.' };
 
-  // Staff first: their credentials open the dashboard, not a customer account.
-  if (await trySignInStaff(email, password)) redirect('/dashboard');
+  // Staff first: their credentials establish the dashboard session, but we leave
+  // them on the public home page — the navbar's Dashboard link takes it from here.
+  if (await trySignInStaff(email, password)) redirect(`/${locale}`);
 
   try {
     await customerSignIn('credentials', { email, password, redirect: false });
