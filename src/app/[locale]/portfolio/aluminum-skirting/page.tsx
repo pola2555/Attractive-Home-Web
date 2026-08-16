@@ -5,6 +5,7 @@ import { getDictionary, t } from '@/i18n/getDictionary';
 import { alternates } from '@/lib/seo';
 import { siteMediaUrl } from '@/lib/media';
 import SmartImage from '@/components/SmartImage';
+import BackLink from '@/components/BackLink';
 
 // Aluminum-skirting landing page — ported from the old SPA (same copy + assets).
 // Static route wins over /portfolio/[category], so it keeps the legacy URL.
@@ -74,6 +75,14 @@ export default async function AluminumSkirtingPage({
             {tr('discover')}
           </a>
         </div>
+      </div>
+
+      <div className="px-10 2xl:px-20 pt-8 bg-bg">
+        <BackLink
+          href={`/${locale}/portfolio`}
+          label={t(dict, 'backToPortfolio')}
+          className="text-sm font-medium text-muted hover:text-accent"
+        />
       </div>
 
       {/* Premium profiles */}

@@ -10,6 +10,7 @@ import { siteMediaUrl } from '@/lib/media';
 import { alternates } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
 import ProjectCard from '../ProjectCard';
+import BackLink from '@/components/BackLink';
 
 export const revalidate = 3600;
 
@@ -118,6 +119,13 @@ export default async function PortfolioCategoryPage({
       </div>
 
       {/* Project grid — on the page background, below the hero. */}
+      <div className="max-w-5xl mx-auto px-6 md:px-12 lg:px-24 pt-10">
+        <BackLink
+          href={`/${locale}/portfolio`}
+          label={t(dict, 'backToPortfolio')}
+          className="text-sm font-medium text-muted hover:text-accent"
+        />
+      </div>
       <div className="max-w-5xl mx-auto grid gap-24 md:grid-cols-2 px-6 md:px-12 lg:px-24 py-20">
         {projects.map((project) => {
           const tr = pickTranslation(project.translations, locale);

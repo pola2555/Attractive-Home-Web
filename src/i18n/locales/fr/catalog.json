@@ -1,5 +1,6 @@
 {
   "libraryTitle": "Bibliothèque de matériaux",
+  "backToCatalog": "Retour au catalogue",
   "searchPlaceholder": "Rechercher parmi {{count}} produits — code, nom, aspect, pièce…",
   "searchPlaceholderShort": "Rechercher {{count}} produits…",
   "prev": "Précédent",

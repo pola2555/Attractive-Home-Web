@@ -1,5 +1,6 @@
 {
   "libraryTitle": "Material Library",
+  "backToCatalog": "Back to catalog",
   "searchPlaceholder": "Search {{count}} products — code, name, look, room…",
   "searchPlaceholderShort": "Search {{count}} products…",
   "prev": "Previous",

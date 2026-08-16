@@ -10,6 +10,7 @@ import { siteMediaUrl } from '@/lib/media';
 import { alternates } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
 import SmartImage from '@/components/SmartImage';
+import BackLink from '@/components/BackLink';
 
 export const revalidate = 3600;
 
@@ -105,6 +106,11 @@ export default async function ProjectPage({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 pt-10 space-y-14">
+        <BackLink
+          href={`/${locale}/portfolio/${category}`}
+          label={`${t(dict, 'backTo')} ${t(dict, `categories.${project.category.legacyKey}.title`)}`}
+          className="text-sm font-medium text-muted hover:text-accent"
+        />
         {tr?.description && <p className="text-ink-soft max-w-3xl leading-relaxed">{tr.description}</p>}
 
         {groups.map((group) => (

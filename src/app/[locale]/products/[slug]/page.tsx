@@ -11,6 +11,7 @@ import { getContactSettings } from '@/lib/content';
 import { productCardInclude } from '@/lib/catalog';
 import ProductGallery from '@/components/ProductGallery';
 import ProductCard from '@/components/ProductCard';
+import BackLink from '@/components/BackLink';
 import SocialIcon from '@/components/SocialIcon';
 import FavoriteButton from '@/components/favorites/FavoriteButton';
 import TrackedLink from '@/components/analytics/TrackedLink';
@@ -180,6 +181,11 @@ export default async function ProductPage({
     <section className="bg-bg min-h-screen pt-28 sm:pt-32 pb-16 px-4 sm:px-6 lg:px-10">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <div className="max-w-6xl mx-auto">
+        <BackLink
+          href={`/${locale}/catalog`}
+          label={t(dict, 'backToCatalog')}
+          className="text-sm font-medium text-muted hover:text-accent mb-4"
+        />
         <nav className="text-sm text-muted mb-6" aria-label="Breadcrumb">
           <Link href={`/${locale}/catalog`} className="hover:text-accent">
             {t(dict, 'libraryTitle')}

@@ -25,6 +25,7 @@
   "exploreMore": "Узнать больше",
   "categoryNotFound": "Категория не найдена!",
   "backToPortfolio": "Назад к портфолио",
+  "backTo": "Назад к",
   "projectNotFound": "Проект не найден!",
   "loadingProject": "Загрузка проекта...",
   "showFolder": "Показать {{folder}}",

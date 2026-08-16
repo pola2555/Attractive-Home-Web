@@ -1,5 +1,6 @@
 {
   "libraryTitle": "Библиотека материалов",
+  "backToCatalog": "Назад в каталог",
   "searchPlaceholder": "Поиск среди {{count}} товаров — код, название, вид, помещение…",
   "searchPlaceholderShort": "Поиск среди {{count}} товаров…",
   "prev": "Назад",

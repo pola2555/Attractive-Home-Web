@@ -1,5 +1,6 @@
 {
   "libraryTitle": "مكتبة المواد",
+  "backToCatalog": "العودة إلى الكتالوج",
   "searchPlaceholder": "ابحث في {{count}} منتجًا — الكود، الاسم، المظهر…",
   "searchPlaceholderShort": "ابحث في {{count}} منتجًا…",
   "prev": "السابق",
