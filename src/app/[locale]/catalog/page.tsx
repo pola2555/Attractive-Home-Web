@@ -28,7 +28,7 @@ import ProductCard from '@/components/ProductCard';
 import FiltersSidebar, { catalogHref } from './FiltersSidebar';
 import CatalogFilters from './CatalogFilters';
 import ShopByTiles from './ShopByTiles';
-import CatalogEditor from './CatalogEditor';
+import { CatalogEditProvider, FiltersSlot, ShopBySlot } from './CatalogEditor';
 
 export async function generateMetadata({
   params,
@@ -107,8 +107,16 @@ export default async function CatalogPage({
   ];
 
   return (
-    <section className="bg-bg min-h-screen pt-28 sm:pt-32 pb-16 px-4 sm:px-6 lg:px-10">
-      <div className="max-w-[110rem] mx-auto">
+    <CatalogEditProvider
+      initialConfig={filterConfig}
+      labels={baseFacetLabels}
+      initialShopBy={shopByConfig}
+      shopFacets={shopFacets}
+      shopLabels={shopLabels}
+      pickLabels={pickLabels}
+    >
+      <section className="bg-bg min-h-screen pt-28 sm:pt-32 pb-16 px-4 sm:px-6 lg:px-10">
+        <div className="max-w-[110rem] mx-auto">
         <h1 className="text-3xl sm:text-4xl font-bold text-heading mb-2">{t(dict, 'libraryTitle')}</h1>
         <p className="text-muted mb-8">{t(dict, 'browse')}</p>
 
@@ -132,38 +140,42 @@ export default async function CatalogPage({
         </form>
 
         <div className="grid grid-cols-1 lg:grid-cols-[16rem_1fr] gap-10">
-          <CatalogFilters
-            filtersLabel={t(dict, 'filters')}
-            closeLabel={t(dict, 'close')}
-            viewResultsLabel={t(dict, 'viewResults', { count: total })}
-            activeCount={activeCount}
-          >
-            <FiltersSidebar
-              locale={locale}
-              filters={filters}
-              facets={facets}
-              entries={visibleFilters}
-              labels={facetLabels}
-              clearAllLabel={t(dict, 'clearAll')}
-              collectionUi={{
-                showAll: t(dict, 'showAll'),
-                showLess: t(dict, 'showLess'),
-                filter: t(dict, 'filterPlaceholder'),
-              }}
-            />
-          </CatalogFilters>
-
-          <div>
-            {showShopBy && reps && (
-              <ShopByTiles
+          <FiltersSlot>
+            <CatalogFilters
+              filtersLabel={t(dict, 'filters')}
+              closeLabel={t(dict, 'close')}
+              viewResultsLabel={t(dict, 'viewResults', { count: total })}
+              activeCount={activeCount}
+            >
+              <FiltersSidebar
                 locale={locale}
                 filters={filters}
                 facets={facets}
-                sections={shopByConfig}
-                reps={reps}
-                pickImages={pickImages}
-                labels={shopLabels}
+                entries={visibleFilters}
+                labels={facetLabels}
+                clearAllLabel={t(dict, 'clearAll')}
+                collectionUi={{
+                  showAll: t(dict, 'showAll'),
+                  showLess: t(dict, 'showLess'),
+                  filter: t(dict, 'filterPlaceholder'),
+                }}
               />
+            </CatalogFilters>
+          </FiltersSlot>
+
+          <div>
+            {showShopBy && reps && (
+              <ShopBySlot>
+                <ShopByTiles
+                  locale={locale}
+                  filters={filters}
+                  facets={facets}
+                  sections={shopByConfig}
+                  reps={reps}
+                  pickImages={pickImages}
+                  labels={shopLabels}
+                />
+              </ShopBySlot>
             )}
             <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 mb-6">
               <p className="text-muted text-sm">
@@ -246,17 +258,8 @@ export default async function CatalogPage({
             )}
           </div>
         </div>
-
-        {/* Staff-only in-context layout editor (renders nothing for shoppers). */}
-        <CatalogEditor
-          initialConfig={filterConfig}
-          labels={baseFacetLabels}
-          initialShopBy={shopByConfig}
-          shopFacets={shopFacets}
-          shopLabels={shopLabels}
-          pickLabels={pickLabels}
-        />
       </div>
-    </section>
+      </section>
+    </CatalogEditProvider>
   );
 }
