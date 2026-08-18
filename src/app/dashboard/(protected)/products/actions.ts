@@ -355,43 +355,138 @@ function writeErrorMessage(err: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
-// Inline price entry (kept from the price-entry list — fast bulk pricing)
+// Inline row edits — fast price / unit / featured-rank + publish toggle
 // ---------------------------------------------------------------------------
 
-const priceSchema = z.object({
+const rowSchema = z.object({
   price: z.coerce.number().min(0).max(9_999_999_999),
   priceUnit: z
     .string()
     .trim()
     .max(50)
     .transform((v) => v || null),
+  featuredRank: z
+    .union([z.literal(''), z.coerce.number().int().min(0).max(1_000_000)])
+    .transform((v) => (v === '' ? null : v)),
 });
 
-export async function updateProductPrice(productId: string, formData: FormData): Promise<void> {
+export async function saveProductRow(productId: string, formData: FormData): Promise<void> {
   const user = await requirePermission('catalog.write');
-  const parsed = priceSchema.safeParse({
-    price: formData.get('price'),
+  const parsed = rowSchema.safeParse({
+    price: formData.get('price') ?? 0,
     priceUnit: formData.get('priceUnit') ?? '',
+    featuredRank: formData.get('featuredRank') ?? '',
   });
   if (!parsed.success) return;
+  const { price, priceUnit, featuredRank } = parsed.data;
 
-  const product = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
-  const oldPrice = Number(product.price);
-  if (oldPrice === parsed.data.price && product.priceUnit === parsed.data.priceUnit) return;
-
-  await prisma.product.update({
+  const product = await prisma.product.findUnique({
     where: { id: productId },
-    data: { price: parsed.data.price, priceUnit: parsed.data.priceUnit },
+    select: { legacyId: true, price: true, priceUnit: true, featuredRank: true },
   });
+  if (!product) return;
+  if (Number(product.price) === price && product.priceUnit === priceUnit && product.featuredRank === featuredRank) {
+    return;
+  }
+
+  await prisma.product.update({ where: { id: productId }, data: { price, priceUnit, featuredRank } });
   await writeAudit({
     userId: user.id,
     entityType: 'product',
     entityId: product.legacyId,
     action: 'update',
     diff: {
-      price: { from: oldPrice, to: parsed.data.price },
-      price_unit: { from: product.priceUnit, to: parsed.data.priceUnit },
+      price: { from: Number(product.price), to: price },
+      price_unit: { from: product.priceUnit, to: priceUnit },
+      featured_rank: { from: product.featuredRank, to: featuredRank },
     },
+  });
+  revalidatePath('/dashboard/products');
+}
+
+export async function setProductPublished(productId: string, next: boolean): Promise<void> {
+  const user = await requirePermission('catalog.write');
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { legacyId: true, isPublished: true },
+  });
+  if (!product || product.isPublished === next) return;
+  await prisma.product.update({ where: { id: productId }, data: { isPublished: next } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: product.legacyId,
+    action: 'update',
+    diff: { is_published: { from: product.isPublished, to: next } },
+  });
+  revalidatePath('/dashboard/products');
+}
+
+// ---------------------------------------------------------------------------
+// Bulk actions — operate on the selected product ids (one summary audit row)
+// ---------------------------------------------------------------------------
+
+const idsSchema = z.array(z.string().uuid()).min(1).max(2000);
+
+export async function bulkSetPublished(ids: string[], next: boolean): Promise<void> {
+  const user = await requirePermission('catalog.write');
+  const clean = idsSchema.safeParse(ids);
+  if (!clean.success) return;
+  const res = await prisma.product.updateMany({ where: { id: { in: clean.data } }, data: { isPublished: next } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: `${res.count} products`,
+    action: 'update',
+    diff: { is_published: { from: null, to: next } },
+  });
+  revalidatePath('/dashboard/products');
+}
+
+export async function bulkSetSource(ids: string[], sourceId: string): Promise<void> {
+  const user = await requirePermission('catalog.write');
+  const clean = idsSchema.safeParse(ids);
+  if (!clean.success || !z.string().uuid().safeParse(sourceId).success) return;
+  const source = await prisma.source.findUnique({ where: { id: sourceId }, select: { code: true } });
+  if (!source) return;
+  const res = await prisma.product.updateMany({ where: { id: { in: clean.data } }, data: { sourceId } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: `${res.count} products`,
+    action: 'update',
+    diff: { source: { from: null, to: source.code } },
+  });
+  revalidatePath('/dashboard/products');
+}
+
+export async function bulkSetFeatured(ids: string[], rank: number | null): Promise<void> {
+  const user = await requirePermission('catalog.write');
+  const clean = idsSchema.safeParse(ids);
+  if (!clean.success) return;
+  const value = rank === null ? null : Math.max(0, Math.min(1_000_000, Math.trunc(rank)));
+  const res = await prisma.product.updateMany({ where: { id: { in: clean.data } }, data: { featuredRank: value } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: `${res.count} products`,
+    action: 'update',
+    diff: { featured_rank: { from: null, to: value } },
+  });
+  revalidatePath('/dashboard/products');
+}
+
+export async function bulkDeleteProducts(ids: string[]): Promise<void> {
+  const user = await requirePermission('catalog.write');
+  const clean = idsSchema.safeParse(ids);
+  if (!clean.success) return;
+  const res = await prisma.product.deleteMany({ where: { id: { in: clean.data } } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: `${res.count} products`,
+    action: 'delete',
+    diff: { deleted: { from: res.count, to: null } },
   });
   revalidatePath('/dashboard/products');
 }
