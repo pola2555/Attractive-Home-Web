@@ -20,6 +20,7 @@ import ProductCard from '@/components/ProductCard';
 import FiltersSidebar, { catalogHref } from './FiltersSidebar';
 import CatalogFilters from './CatalogFilters';
 import ShopByTiles from './ShopByTiles';
+import CatalogEditor from './CatalogEditor';
 
 export async function generateMetadata({
   params,
@@ -61,9 +62,10 @@ export default async function CatalogPage({
   ]);
 
   // Labels default to the i18n facet name; the admin config can override each.
-  const facetLabels = Object.fromEntries(
+  const baseFacetLabels = Object.fromEntries(
     FACET_KEYS.map((key) => [key, t(dict, `facet.${key}`)]),
   ) as Record<FacetKey, string>;
+  const facetLabels = { ...baseFacetLabels };
   const visibleFilters = filterConfig.filter((e) => e.visible);
   for (const entry of visibleFilters) {
     if (entry.label) facetLabels[entry.facetKey] = entry.label;
@@ -224,6 +226,9 @@ export default async function CatalogPage({
             )}
           </div>
         </div>
+
+        {/* Staff-only in-context layout editor (renders nothing for shoppers). */}
+        <CatalogEditor initialConfig={filterConfig} labels={baseFacetLabels} />
       </div>
     </section>
   );
