@@ -368,6 +368,16 @@ export async function shopRepImages(): Promise<{
   };
 }
 
+// Display labels (English name / code) for picked products — for the editor UI.
+export async function pickProductLabels(productIds: string[]): Promise<Record<string, string>> {
+  if (productIds.length === 0) return {};
+  const rows = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    select: { id: true, code: true, translations: { where: { localeCode: 'en' }, select: { name: true } } },
+  });
+  return Object.fromEntries(rows.map((r) => [r.id, r.translations[0]?.name ?? r.code ?? r.id]));
+}
+
 // Primary-image lookup for admin-picked Shop-by tiles (productId → image).
 export async function pickRepImages(productIds: string[]): Promise<Map<string, RepImage>> {
   if (productIds.length === 0) return new Map();

@@ -9,6 +9,7 @@ import {
   queryProducts,
   shopRepImages,
   pickRepImages,
+  pickProductLabels,
   CATALOG_PAGE_SIZE,
   PER_PAGE_OPTIONS,
   FACET_KEYS,
@@ -68,7 +69,10 @@ export default async function CatalogPage({
     getCatalogFilterConfig(),
     getShopByConfig(),
   ]);
-  const pickImages = showShopBy ? await pickRepImages(pickedProductIds(shopByConfig)) : new Map();
+  const pickIds = pickedProductIds(shopByConfig);
+  const [pickImages, pickLabels] = showShopBy
+    ? await Promise.all([pickRepImages(pickIds), pickProductLabels(pickIds)])
+    : [new Map(), {} as Record<string, string>];
 
   const shopLabels: Record<ShopKey, string> = {
     application: t(dict, 'shop.application'),
@@ -250,6 +254,7 @@ export default async function CatalogPage({
           initialShopBy={shopByConfig}
           shopFacets={shopFacets}
           shopLabels={shopLabels}
+          pickLabels={pickLabels}
         />
       </div>
     </section>

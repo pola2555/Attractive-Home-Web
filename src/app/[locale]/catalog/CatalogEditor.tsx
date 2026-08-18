@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CatalogFilterEntry, FilterWidget } from '@/lib/catalogConfig';
 import type { ShopBySection, ShopKey } from '@/lib/catalogShopByConfig';
-import { saveCatalogFilterConfig, saveShopByConfig } from './catalogEditorActions';
+import { saveCatalogFilterConfig, saveShopByConfig, searchProductsForPick, type PickResult } from './catalogEditorActions';
 
 // In-context catalog layout editor. Mounted on the public catalog page but only
 // activates for a signed-in staff member (same client session probe the navbar
@@ -44,12 +44,14 @@ export default function CatalogEditor({
   initialShopBy,
   shopFacets,
   shopLabels,
+  pickLabels,
 }: {
   initialConfig: CatalogFilterEntry[];
   labels: Record<string, string>;
   initialShopBy: ShopBySection[];
   shopFacets: Record<ShopKey, ShopValue[]>;
   shopLabels: Record<ShopKey, string>;
+  pickLabels: Record<string, string>;
 }) {
   const router = useRouter();
   const [staff, setStaff] = useState(false);
@@ -61,6 +63,14 @@ export default function CatalogEditor({
   const [pending, start] = useTransition();
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+
+  // Product-pick flow (Shop-by tile image override).
+  const [picking, setPicking] = useState<{ sectionIdx: number; code: string } | null>(null);
+  const [pickQ, setPickQ] = useState('');
+  const [pickResults, setPickResults] = useState<PickResult[]>([]);
+  const [pickBusy, setPickBusy] = useState(false);
+  const [newLabels, setNewLabels] = useState<Record<string, string>>({});
+  const labelFor = (id: string) => newLabels[id] ?? pickLabels[id] ?? 'chosen product';
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +137,35 @@ export default function CatalogEditor({
       }),
     );
 
+  const setPick = (sectionIdx: number, code: string, product: PickResult) => {
+    setShop((prev) =>
+      prev.map((s, si) => (si !== sectionIdx ? s : { ...s, picks: { ...s.picks, [code]: product.id } })),
+    );
+    setNewLabels((prev) => ({ ...prev, [product.id]: product.name || product.code || 'chosen product' }));
+    setPicking(null);
+    setPickResults([]);
+    setPickQ('');
+  };
+  const clearPick = (sectionIdx: number, code: string) =>
+    setShop((prev) =>
+      prev.map((s, si) => {
+        if (si !== sectionIdx) return s;
+        const picks = { ...s.picks };
+        delete picks[code];
+        return { ...s, picks };
+      }),
+    );
+  const runSearch = async () => {
+    setPickBusy(true);
+    try {
+      setPickResults(await searchProductsForPick(pickQ));
+    } catch {
+      setPickResults([]);
+    } finally {
+      setPickBusy(false);
+    }
+  };
+
   const save = () =>
     start(async () => {
       const res = tab === 'filters' ? await saveCatalogFilterConfig(rows) : await saveShopByConfig(shop);
@@ -164,6 +203,59 @@ export default function CatalogEditor({
         <div className="fixed inset-0 z-[1140]" role="dialog" aria-modal="true" aria-label="Edit catalog layout">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
           <div className="absolute inset-y-0 end-0 w-full max-w-md bg-bg border-s border-line shadow-2xl flex flex-col">
+            {picking && (
+              <div className="absolute inset-0 z-10 bg-bg flex flex-col">
+                <div className="flex items-center gap-3 px-5 py-4 border-b border-line">
+                  <button type="button" onClick={() => setPicking(null)} className="text-muted hover:text-ink text-sm">
+                    ← Back
+                  </button>
+                  <span className="font-medium text-heading">Pick a product image</span>
+                </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void runSearch();
+                  }}
+                  className="px-5 py-3 flex gap-2 border-b border-line"
+                >
+                  <input value={pickQ} onChange={(e) => setPickQ(e.target.value)} placeholder="Search by name or code…" className={`${ctl} flex-1`} autoFocus />
+                  <button type="submit" disabled={pickBusy} className="px-3 py-1.5 rounded bg-brand-brown text-white text-sm disabled:opacity-50">
+                    Search
+                  </button>
+                </form>
+                <div className="flex-1 overflow-y-auto px-5 py-3">
+                  {pickBusy ? (
+                    <p className="text-muted text-sm">Searching…</p>
+                  ) : pickResults.length === 0 ? (
+                    <p className="text-muted text-sm">Search a product name or code, then tap a result to use its image.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {pickResults.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => picking && setPick(picking.sectionIdx, picking.code, p)}
+                          className="rounded-lg border border-line overflow-hidden hover:border-accent text-start"
+                        >
+                          <div className="aspect-square bg-surface-2">
+                            {p.thumb && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.thumb} alt="" className="w-full h-full object-cover" />
+                            )}
+                          </div>
+                          <div className="p-1.5">
+                            <p className="text-[11px] text-ink truncate" title={p.name}>
+                              {p.name}
+                            </p>
+                            {p.code && <p className="text-[10px] text-muted truncate">{p.code}</p>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between px-5 pt-4 border-b border-line">
               <div className="flex gap-1">
                 {tabBtn('filters', 'Filters')}
@@ -275,6 +367,29 @@ export default function CatalogEditor({
                                 </button>
                                 <span className="flex-1 truncate text-ink">{v.name}</span>
                                 <span className="text-muted text-xs">{v.count}</span>
+                                {section.key !== 'color' &&
+                                  (section.picks[v.code] ? (
+                                    <span className="flex items-center gap-1 text-xs text-accent max-w-[9rem]">
+                                      <span className="truncate" title={labelFor(section.picks[v.code])}>
+                                        ★ {labelFor(section.picks[v.code])}
+                                      </span>
+                                      <button type="button" onClick={() => clearPick(i, v.code)} aria-label="Clear picked image" className="text-muted hover:text-ink">
+                                        ×
+                                      </button>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPicking({ sectionIdx: i, code: v.code });
+                                        setPickResults([]);
+                                        setPickQ('');
+                                      }}
+                                      className="text-xs text-muted hover:text-accent whitespace-nowrap"
+                                    >
+                                      Pick image
+                                    </button>
+                                  ))}
                               </div>
                             ))}
                           </div>

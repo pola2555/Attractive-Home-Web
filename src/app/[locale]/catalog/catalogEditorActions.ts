@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/permissions';
 import { writeAudit } from '@/lib/audit';
+import { productMediaUrl } from '@/lib/media';
 import {
   CATALOG_FILTERS_KEY,
   catalogFiltersSchema,
@@ -54,6 +55,42 @@ export async function saveCatalogFilterConfig(config: CatalogFilterEntry[]): Pro
 
   revalidatePath('/', 'layout'); // catalog pages regenerate with the new sidebar
   return { ok: true };
+}
+
+// Product search for the Shop-by "pick a product" flow (staff-only). Returns a
+// small, serialisable result set with a thumbnail for each match.
+export type PickResult = { id: string; name: string; code: string | null; thumb: string | null };
+
+export async function searchProductsForPick(q: string): Promise<PickResult[]> {
+  await requirePermission('catalog.write');
+  const term = q.trim();
+  if (term.length < 2) return [];
+
+  const rows = await prisma.product.findMany({
+    where: {
+      isPublished: true,
+      OR: [
+        { code: { contains: term, mode: 'insensitive' } },
+        { translations: { some: { name: { contains: term, mode: 'insensitive' } } } },
+      ],
+    },
+    take: 24,
+    orderBy: { featuredRank: 'asc' },
+    select: {
+      id: true,
+      code: true,
+      translations: { where: { localeCode: 'en' }, select: { name: true } },
+      source: { select: { code: true } },
+      images: { where: { sortOrder: 0 }, take: 1, select: { s3Key: true, thumbKey: true } },
+    },
+  });
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.translations[0]?.name ?? r.code ?? '',
+    code: r.code,
+    thumb: r.images[0] ? productMediaUrl(r.images[0].thumbKey ?? r.images[0].s3Key, r.source.code) : null,
+  }));
 }
 
 export async function saveShopByConfig(sections: ShopBySection[]): Promise<SaveResult> {
