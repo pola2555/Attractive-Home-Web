@@ -190,6 +190,7 @@ export type ProjectMediaInput = {
 export type ProjectFormInitial = {
   id: string;
   legacyId: string;
+  updatedAt: string; // ISO — optimistic-lock version carried by the edit form
   slug: string;
   categoryId: string;
   coverKey: string;
@@ -263,6 +264,7 @@ export async function getProjectForEdit(id: string): Promise<ProjectFormInitial 
   return {
     id: p.id,
     legacyId: p.legacyId,
+    updatedAt: p.updatedAt.toISOString(),
     slug: p.slug,
     categoryId: p.categoryId,
     coverKey: p.coverKey ?? '',

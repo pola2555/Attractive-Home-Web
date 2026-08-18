@@ -1,5 +1,7 @@
 'use client';
 
+import UnsavedChangesGuard from '../UnsavedChangesGuard';
+
 import { useActionState, useState } from 'react';
 import type { SettingsForm as SettingsData } from '@/lib/settingsAdmin';
 import type { FormState } from './actions';
@@ -29,6 +31,7 @@ export default function SettingsForm({
 
   return (
     <form action={formAction} className="max-w-3xl space-y-10">
+      <UnsavedChangesGuard />
       {saved && !state.error && (
         <p className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/40 text-green-200 text-sm">
           Settings saved.

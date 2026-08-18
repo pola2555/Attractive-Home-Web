@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/permissions';
 import { writeAudit } from '@/lib/audit';
 import { slugify } from '@/lib/slug';
+import { CONFLICT_MESSAGE, parseExpectedUpdatedAt, versionMatches } from '@/lib/optimisticLock';
 import { LOCALES, type Locale } from '@/i18n/config';
 
 export type FormState = { error?: string };
@@ -480,9 +481,15 @@ export async function updateProject(
 
   const existing = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { legacyId: true, slug: true },
+    select: { legacyId: true, slug: true, updatedAt: true },
   });
   if (!existing) return { error: 'Project not found.' };
+
+  // Optimistic lock: refuse the write if someone else saved since this form was
+  // loaded, so their edit isn't silently overwritten.
+  const expected = parseExpectedUpdatedAt(formData);
+  if (!versionMatches(existing.updatedAt, expected)) return { error: CONFLICT_MESSAGE };
+
   const slug = data.slug === existing.slug ? existing.slug : await uniqueProjectSlug(data.slug, projectId);
 
   try {

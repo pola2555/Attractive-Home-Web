@@ -5,6 +5,7 @@ import { LOCALES, dirOf, type Locale } from '@/i18n/config';
 import type { FacetOptions, FacetOption, ProductFormInitial } from '@/lib/catalogAdmin';
 import type { ProductFormState } from './actions';
 import ProductImageUploader from './ProductImageUploader';
+import UnsavedChangesGuard from '../UnsavedChangesGuard';
 
 const LOCALE_LABEL: Record<Locale, string> = { en: 'English', ar: 'Arabic', fr: 'French', ru: 'Russian' };
 
@@ -189,6 +190,8 @@ export default function ProductForm({
 
   return (
     <form action={formAction} className="max-w-4xl space-y-10">
+      <UnsavedChangesGuard />
+      {initial && <input type="hidden" name="expectedUpdatedAt" value={initial.updatedAt} />}
       {state.error && (
         <p className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/40 text-red-200 text-sm">
           {state.error}

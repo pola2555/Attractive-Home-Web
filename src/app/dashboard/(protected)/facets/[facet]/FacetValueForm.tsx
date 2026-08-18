@@ -1,5 +1,7 @@
 'use client';
 
+import UnsavedChangesGuard from '../../UnsavedChangesGuard';
+
 import { useActionState } from 'react';
 import { LOCALES, dirOf, type Locale } from '@/i18n/config';
 import type { FacetValueEdit } from '@/lib/facetsAdmin';
@@ -27,6 +29,7 @@ export default function FacetValueForm({
 
   return (
     <form action={formAction} className="space-y-4 max-w-xl">
+      <UnsavedChangesGuard />
       {state.error && (
         <p className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/40 text-red-200 text-sm">
           {state.error}

@@ -1,5 +1,7 @@
 'use client';
 
+import UnsavedChangesGuard from '../UnsavedChangesGuard';
+
 import { useActionState } from 'react';
 import { LOCALES, dirOf, type Locale } from '@/i18n/config';
 import type { ContentBlockFormInitial } from '@/lib/contentAdmin';
@@ -23,6 +25,7 @@ export default function ContentBlockForm({
 
   return (
     <form action={formAction} className="max-w-3xl space-y-6">
+      <UnsavedChangesGuard />
       {state.error && (
         <p className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/40 text-red-200 text-sm">
           {state.error}

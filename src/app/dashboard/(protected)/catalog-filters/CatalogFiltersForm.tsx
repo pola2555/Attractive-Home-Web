@@ -1,5 +1,7 @@
 'use client';
 
+import UnsavedChangesGuard from '../UnsavedChangesGuard';
+
 import { useActionState, useState } from 'react';
 import type { CatalogFilterEntry, FilterWidget } from '@/lib/catalogConfig';
 import type { FormState } from './actions';
@@ -44,6 +46,7 @@ export default function CatalogFiltersForm({
 
   return (
     <form action={formAction} className="space-y-6 max-w-3xl">
+      <UnsavedChangesGuard />
       <input type="hidden" name="configJson" value={JSON.stringify(rows)} />
 
       <div className="space-y-2">

@@ -105,6 +105,7 @@ export type ProductImageInput = {
 export type ProductFormInitial = {
   id: string;
   legacyId: string;
+  updatedAt: string; // ISO — optimistic-lock version carried by the edit form
   slug: string;
   code: string;
   sourceId: string;
@@ -172,6 +173,7 @@ export async function getProductForEdit(id: string): Promise<ProductFormInitial 
   return {
     id: product.id,
     legacyId: product.legacyId,
+    updatedAt: product.updatedAt.toISOString(),
     slug: product.slug,
     code: product.code ?? '',
     sourceId: product.sourceId,

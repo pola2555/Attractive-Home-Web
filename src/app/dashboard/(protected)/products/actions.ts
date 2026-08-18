@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/permissions';
 import { writeAudit } from '@/lib/audit';
 import { slugify } from '@/lib/slug';
+import { CONFLICT_MESSAGE, parseExpectedUpdatedAt, versionMatches } from '@/lib/optimisticLock';
 import { LOCALES, type Locale } from '@/i18n/config';
 
 export type ProductFormState = { error?: string };
@@ -257,9 +258,14 @@ export async function updateProduct(
 
   const existing = await prisma.product.findUnique({
     where: { id: productId },
-    select: { legacyId: true, slug: true },
+    select: { legacyId: true, slug: true, updatedAt: true },
   });
   if (!existing) return { error: 'Product not found.' };
+
+  // Optimistic lock: refuse the write if someone else saved since this form was
+  // loaded, so their edit isn't silently overwritten.
+  const expected = parseExpectedUpdatedAt(formData);
+  if (!versionMatches(existing.updatedAt, expected)) return { error: CONFLICT_MESSAGE };
 
   const requested = data.slug || slugify(data.nameEn) || existing.slug;
   const slug = requested === existing.slug ? existing.slug : await uniqueSlug(requested, productId);

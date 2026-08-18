@@ -1,5 +1,7 @@
 'use client';
 
+import UnsavedChangesGuard from '../../UnsavedChangesGuard';
+
 import { useActionState, useState } from 'react';
 import { LOCALES, dirOf, type Locale } from '@/i18n/config';
 import type { ProjectFormInitial } from '@/lib/portfolioAdmin';
@@ -72,6 +74,8 @@ export default function ProjectForm({
 
   return (
     <form action={formAction} className="max-w-4xl space-y-10">
+      <UnsavedChangesGuard />
+      {initial && <input type="hidden" name="expectedUpdatedAt" value={initial.updatedAt} />}
       {state.error && (
         <p className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/40 text-red-200 text-sm">
           {state.error}

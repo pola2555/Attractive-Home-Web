@@ -1,5 +1,7 @@
 'use client';
 
+import UnsavedChangesGuard from '../UnsavedChangesGuard';
+
 import { useActionState } from 'react';
 import type { RoleOption, PermissionOption, UserFormInitial } from '@/lib/usersAdmin';
 import type { FormState } from './actions';
@@ -32,6 +34,7 @@ export default function UserForm({
 
   return (
     <form action={formAction} className="max-w-3xl space-y-8">
+      <UnsavedChangesGuard />
       {state.error && (
         <p className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/40 text-red-200 text-sm">
           {state.error}
