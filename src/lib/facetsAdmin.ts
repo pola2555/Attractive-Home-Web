@@ -86,7 +86,8 @@ export const facetHasHex = (t: FacetType) => REGISTRY[t].hasHex;
 export type FacetValue = {
   id: string;
   code: string;
-  name: string;
+  name: string; // English name (or code) — for display
+  names: Record<Locale, string>; // every locale — for inline editing
   sortOrder: number;
   isActive: boolean;
   hex: string | null;
@@ -94,7 +95,7 @@ export type FacetValue = {
 };
 
 const listInclude = {
-  translations: { where: { localeCode: 'en' }, select: { localeCode: true, name: true } },
+  translations: { select: { localeCode: true, name: true } },
   _count: { select: { products: true } },
 };
 
@@ -104,15 +105,38 @@ export async function listFacetValues(type: FacetType): Promise<FacetValue[]> {
     orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
     include: listInclude,
   });
-  return rows.map((r) => ({
-    id: r.id,
-    code: r.code,
-    name: r.translations[0]?.name ?? r.code,
-    sortOrder: r.sortOrder,
-    isActive: r.isActive,
-    hex: hasHex ? (r.hex ?? null) : null,
-    uses: r._count.products,
-  }));
+  return rows.map((r) => {
+    const names = {} as Record<Locale, string>;
+    for (const l of LOCALES) names[l] = r.translations.find((t) => t.localeCode === l)?.name ?? '';
+    return {
+      id: r.id,
+      code: r.code,
+      name: names.en || r.code,
+      names,
+      sortOrder: r.sortOrder,
+      isActive: r.isActive,
+      hex: hasHex ? (r.hex ?? null) : null,
+      uses: r._count.products,
+    };
+  });
+}
+
+// Reorder: move a value one slot up/down and re-number the whole list 0..n-1 in
+// the new order. Re-numbering (rather than swapping two rows) makes reordering
+// reliable even when the imported values all share sort_order 0.
+export async function moveFacetValue(type: FacetType, id: string, direction: 'up' | 'down'): Promise<void> {
+  const { model } = REGISTRY[type];
+  const rows = await model.findMany({ orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], include: listInclude });
+  const idx = rows.findIndex((r) => r.id === id);
+  if (idx < 0) return;
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= rows.length) return;
+  const ordered = [...rows];
+  const [moved] = ordered.splice(idx, 1);
+  ordered.splice(swapIdx, 0, moved);
+  for (let i = 0; i < ordered.length; i++) {
+    if (ordered[i].sortOrder !== i) await model.update({ where: { id: ordered[i].id }, data: { sortOrder: i } });
+  }
 }
 
 // Value counts for the overview (parallel).

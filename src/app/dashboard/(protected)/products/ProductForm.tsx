@@ -96,11 +96,12 @@ function Text({
         {label} {required && <span className="text-accent">*</span>}
         {hint}
       </span>
+      {/* No HTML `required`: fields live on hidden tabs, where a native required
+          control can't be focused on submit. The server validates instead. */}
       <input
         name={name}
         type={type}
         defaultValue={defaultValue}
-        required={required}
         placeholder={placeholder}
         dir={dir}
         step={step}
@@ -132,7 +133,7 @@ function Select({
         {label} {required && <span className="text-accent">*</span>}
         {hint}
       </span>
-      <select name={name} defaultValue={defaultValue ?? ''} required={required} className={inputCls}>
+      <select name={name} defaultValue={defaultValue ?? ''} className={inputCls}>
         {!required && <option value="">— none —</option>}
         {required && <option value="" disabled>— select —</option>}
         {options.map((o) => (
@@ -172,6 +173,15 @@ function CheckboxGroup({
   );
 }
 
+const TABS = [
+  { id: 'basics', label: 'Basics' },
+  { id: 'classification', label: 'Classification' },
+  { id: 'commerce', label: 'Commerce' },
+  { id: 'media', label: 'Media' },
+  { id: 'seo', label: 'SEO' },
+] as const;
+type TabId = (typeof TABS)[number]['id'];
+
 export default function ProductForm({
   action,
   facets,
@@ -185,86 +195,82 @@ export default function ProductForm({
 }) {
   const [state, formAction, isPending] = useActionState<ProductFormState, FormData>(action, {});
   const [imagesBusy, setImagesBusy] = useState(false);
+  const [tab, setTab] = useState<TabId>('basics');
 
   const t = (locale: Locale) => initial?.translations[locale];
 
+  // en shows open; other locales collapse into a <details> disclosure.
+  const localeWrap = (locale: Locale, body: React.ReactNode) =>
+    locale === 'en' ? (
+      <div key={locale}>
+        <p className="text-sm font-medium text-heading">{LOCALE_LABEL[locale]}</p>
+        {body}
+      </div>
+    ) : (
+      <details key={locale} className="border-t border-line pt-3">
+        <summary className="text-sm font-medium text-heading cursor-pointer">{LOCALE_LABEL[locale]}</summary>
+        {body}
+      </details>
+    );
+
   return (
-    <form action={formAction} className="max-w-4xl space-y-10">
+    <form action={formAction} className="max-w-4xl">
       <UnsavedChangesGuard />
       {initial && <input type="hidden" name="expectedUpdatedAt" value={initial.updatedAt} />}
       {state.error && (
-        <p className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/40 text-red-200 text-sm">
+        <p className="mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/40 text-red-200 text-sm">
           {state.error}
         </p>
       )}
 
-      {/* Translations */}
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-heading">Names &amp; copy</h2>
+      {/* Tabs — every panel stays mounted (hidden), so one submit sends the whole
+          form regardless of which tab is open. */}
+      <div className="flex flex-wrap gap-1 border-b border-line">
+        {TABS.map((tb) => (
+          <button
+            key={tb.id}
+            type="button"
+            onClick={() => setTab(tb.id)}
+            aria-current={tab === tb.id ? 'page' : undefined}
+            className={
+              tab === tb.id
+                ? '-mb-px px-4 py-2 text-sm font-medium text-heading border-b-2 border-accent'
+                : 'px-4 py-2 text-sm text-muted hover:text-heading'
+            }
+          >
+            {tb.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Basics — names/description/usage per locale, slug, publish state */}
+      <div hidden={tab !== 'basics'} className="space-y-4 pt-6">
         {LOCALES.map((locale) => {
           const tr = t(locale);
-          const body = (
+          return localeWrap(
+            locale,
             <div className="space-y-3 pt-3">
-              <Text
-                name={`name_${locale}`}
-                label="Name"
-                required={locale === 'en'}
-                defaultValue={tr?.name}
-                dir={dirOf(locale)}
-              />
+              <Text name={`name_${locale}`} label="Name" required={locale === 'en'} defaultValue={tr?.name} dir={dirOf(locale)} />
               <Text name={`description_${locale}`} label="Description" defaultValue={tr?.description} dir={dirOf(locale)} />
               <Text name={`usageNotes_${locale}`} label="Usage notes" defaultValue={tr?.usageNotes} dir={dirOf(locale)} />
-              <div className="grid grid-cols-2 gap-3">
-                <Text
-                  name={`metaTitle_${locale}`}
-                  label="Meta title (SEO)"
-                  defaultValue={tr?.metaTitle}
-                  dir={dirOf(locale)}
-                  hint={
-                    <InfoHint label="Meta title" width="w-80">
-                      The headline shown in Google results and the browser tab — it isn&apos;t printed on the page
-                      itself. Aim for ~50–60 characters, lead with the product name, and add a key material or size.
-                      Leave blank to fall back to the product name.
-                      <MetaExample highlight="title" />
-                    </InfoHint>
-                  }
-                />
-                <Text
-                  name={`metaDescription_${locale}`}
-                  label="Meta description (SEO)"
-                  defaultValue={tr?.metaDescription}
-                  dir={dirOf(locale)}
-                  hint={
-                    <InfoHint label="Meta description" width="w-80">
-                      The grey summary under the title in Google results. Aim for ~150–160 characters describing the
-                      product to earn the click. It doesn&apos;t affect ranking; leave blank and Google writes its own
-                      snippet.
-                      <MetaExample highlight="description" />
-                    </InfoHint>
-                  }
-                />
-              </div>
-            </div>
-          );
-          return locale === 'en' ? (
-            <div key={locale}>
-              <p className="text-sm font-medium text-heading">{LOCALE_LABEL[locale]}</p>
-              {body}
-            </div>
-          ) : (
-            <details key={locale} className="border-t border-line pt-3">
-              <summary className="text-sm font-medium text-heading cursor-pointer">
-                {LOCALE_LABEL[locale]}
-              </summary>
-              {body}
-            </details>
+            </div>,
           );
         })}
-      </section>
+        <div className="border-t border-line pt-4">
+          <Text name="slug" label="Slug (leave blank to auto-generate from the English name)" defaultValue={initial?.slug} />
+        </div>
+        <div className="flex flex-wrap gap-6 pt-1">
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" name="isPublished" defaultChecked={initial?.isPublished ?? true} /> Published
+          </label>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" name="isAvailable" defaultChecked={initial?.isAvailable ?? true} /> Available
+          </label>
+        </div>
+      </div>
 
-      {/* Facets */}
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-heading">Classification</h2>
+      {/* Classification — facets */}
+      <div hidden={tab !== 'classification'} className="space-y-4 pt-6">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Select
             name="sourceId"
@@ -291,11 +297,10 @@ export default function ProductForm({
         </div>
         <CheckboxGroup name="applications" label="Applications" options={facets.applications} selected={initial?.applicationIds ?? []} />
         <CheckboxGroup name="performance" label="Performance attributes" options={facets.performance} selected={initial?.performanceIds ?? []} />
-      </section>
+      </div>
 
       {/* Commerce */}
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-heading">Commerce &amp; details</h2>
+      <div hidden={tab !== 'commerce'} className="space-y-4 pt-6">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Text name="code" label="Supplier code / SKU" defaultValue={initial?.code} />
           <Text name="sizeLabel" label="Size label" defaultValue={initial?.sizeLabel} placeholder="750×1500 mm" />
@@ -308,27 +313,62 @@ export default function ProductForm({
           <Text name="featuredRank" label="Featured rank" type="number" min="0" defaultValue={initial?.featuredRank} />
         </div>
         <Text name="supplierUrl" label="Supplier URL" type="url" defaultValue={initial?.supplierUrl} placeholder="https://…" />
-        <Text name="slug" label="Slug (leave blank to auto-generate from the English name)" defaultValue={initial?.slug} />
-        <div className="flex flex-wrap gap-6 pt-1">
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" name="isPublished" defaultChecked={initial?.isPublished ?? true} /> Published
-          </label>
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" name="isAvailable" defaultChecked={initial?.isAvailable ?? true} /> Available
-          </label>
-        </div>
-      </section>
+      </div>
 
-      {/* Images */}
-      <ProductImageUploader initial={initial?.images} onBusyChange={setImagesBusy} />
+      {/* Media */}
+      <div hidden={tab !== 'media'} className="pt-6">
+        <ProductImageUploader initial={initial?.images} onBusyChange={setImagesBusy} />
+      </div>
 
-      <div className="flex items-center gap-4 pt-2">
+      {/* SEO — meta title/description per locale */}
+      <div hidden={tab !== 'seo'} className="space-y-4 pt-6">
+        {LOCALES.map((locale) => {
+          const tr = t(locale);
+          return localeWrap(
+            locale,
+            <div className="grid sm:grid-cols-2 gap-3 pt-3">
+              <Text
+                name={`metaTitle_${locale}`}
+                label="Meta title"
+                defaultValue={tr?.metaTitle}
+                dir={dirOf(locale)}
+                hint={
+                  <InfoHint label="Meta title" width="w-80">
+                    The headline shown in Google results and the browser tab — it isn&apos;t printed on the page itself.
+                    Aim for ~50–60 characters, lead with the product name, and add a key material or size. Leave blank to
+                    fall back to the product name.
+                    <MetaExample highlight="title" />
+                  </InfoHint>
+                }
+              />
+              <Text
+                name={`metaDescription_${locale}`}
+                label="Meta description"
+                defaultValue={tr?.metaDescription}
+                dir={dirOf(locale)}
+                hint={
+                  <InfoHint label="Meta description" width="w-80">
+                    The grey summary under the title in Google results. Aim for ~150–160 characters describing the
+                    product to earn the click. It doesn&apos;t affect ranking; leave blank and Google writes its own
+                    snippet.
+                    <MetaExample highlight="description" />
+                  </InfoHint>
+                }
+              />
+            </div>,
+          );
+        })}
+      </div>
+
+      {/* Sticky save bar — always reachable from any tab */}
+      <div className="sticky bottom-0 mt-6 flex flex-wrap items-center gap-4 border-t border-line bg-bg/95 py-3 backdrop-blur">
         <button
           disabled={isPending || imagesBusy}
           className="px-6 py-2.5 rounded-lg bg-brand-brown hover:bg-brand-brown-hover text-white disabled:opacity-60"
         >
           {isPending ? 'Saving…' : imagesBusy ? 'Uploading…' : submitLabel}
         </button>
+        {imagesBusy && <span className="text-accent text-xs">Images are uploading — saving is disabled until they finish.</span>}
       </div>
     </form>
   );
