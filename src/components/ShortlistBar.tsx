@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import SmartImage from './SmartImage';
 import { SAVE_KEY, COMPARE_KEY, useIds, removeId, clearKey } from './shortlistStore';
+import { useFavorites } from './favorites/FavoritesProvider';
 
 type Item = {
   id: string;
@@ -46,7 +47,13 @@ export type ShortlistLabels = {
 };
 
 export default function ShortlistBar({ locale, labels }: { locale: string; labels: ShortlistLabels }) {
-  const savedIds = useIds(SAVE_KEY);
+  // Saved list follows the same source as the card ♥: server favorites when the
+  // customer is signed in, otherwise the anonymous localStorage shortlist.
+  // Compare is always localStorage.
+  const favorites = useFavorites();
+  const localSavedIds = useIds(SAVE_KEY);
+  const savedIds = favorites.authed ? favorites.ids : localSavedIds;
+  const removeSaved = (id: string) => (favorites.authed ? favorites.toggle(id) : removeId(SAVE_KEY, id));
   const compareIds = useIds(COMPARE_KEY);
   const [items, setItems] = useState<Record<string, Item>>({});
   const [overlay, setOverlay] = useState<null | 'compare' | 'short'>(null);
@@ -271,7 +278,7 @@ export default function ShortlistBar({ locale, labels }: { locale: string; label
                               <button
                                 type="button"
                                 aria-label={labels.close}
-                                onClick={() => removeId(SAVE_KEY, id)}
+                                onClick={() => removeSaved(id)}
                                 className="absolute top-2 end-2 w-7 h-7 rounded-lg bg-on-media/95 text-on-accent shadow flex items-center justify-center"
                               >
                                 ✕

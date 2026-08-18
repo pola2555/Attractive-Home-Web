@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useRef, useState, useTransition } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toggleFavorite, mergeFavorites } from './actions';
 
 // Client store for a logged-in customer's server favorites. It hydrates itself
@@ -10,9 +10,14 @@ import { toggleFavorite, mergeFavorites } from './actions';
 // into the account. Anonymous visitors stay authed=false and the cards fall
 // back to their localStorage shortlist behaviour.
 
-type Ctx = { authed: boolean; has: (id: string) => boolean; toggle: (id: string) => void };
+type Ctx = {
+  authed: boolean;
+  ids: string[];
+  has: (id: string) => boolean;
+  toggle: (id: string) => void;
+};
 
-const FavoritesContext = createContext<Ctx>({ authed: false, has: () => false, toggle: () => {} });
+const FavoritesContext = createContext<Ctx>({ authed: false, ids: [], has: () => false, toggle: () => {} });
 export const useFavorites = () => useContext(FavoritesContext);
 
 const SHORTLIST_KEY = 'ahc_short';
@@ -56,6 +61,9 @@ export default function FavoritesProvider({ children }: { children: React.ReactN
   }, []);
 
   const has = (id: string) => ids.has(id);
+  // Stable array reference (only changes when the set changes) so consumers can
+  // safely use it as an effect dependency.
+  const idList = useMemo(() => [...ids], [ids]);
 
   const toggle = (id: string) => {
     setIds((prev) => {
@@ -76,5 +84,7 @@ export default function FavoritesProvider({ children }: { children: React.ReactN
     });
   };
 
-  return <FavoritesContext.Provider value={{ authed, has, toggle }}>{children}</FavoritesContext.Provider>;
+  return (
+    <FavoritesContext.Provider value={{ authed, ids: idList, has, toggle }}>{children}</FavoritesContext.Provider>
+  );
 }
