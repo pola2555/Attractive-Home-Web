@@ -29,7 +29,9 @@ const nameOf = (n: Named, locale: Locale) => (n ? pickTranslation(n.translations
 export default function ProductCard({ product, locale }: { product: ProductForCard; locale: Locale }) {
   const name = pickTranslation(product.translations, locale)?.name ?? product.code ?? '';
   const image = product.images[0];
-  const src = image ? productMediaUrl(image.thumbKey ?? image.s3Key, product.source.code) : null;
+  // Use the full display image (s3Key) rather than the small thumbnail so cards
+  // stay crisp at the larger tile size; SmartImage falls back to the supplier URL.
+  const src = image ? productMediaUrl(image.s3Key, product.source.code) : null;
 
   const typeName = nameOf(product.type, locale);
   const lookName = nameOf(product.look, locale);
@@ -44,7 +46,7 @@ export default function ProductCard({ product, locale }: { product: ProductForCa
     .join(' · ');
 
   return (
-    <div className="group relative bg-surface rounded-lg overflow-hidden border border-line transition duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-accent">
+    <div className="group relative bg-surface rounded-xl overflow-hidden border border-line shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:border-accent/70">
       <div className="relative aspect-square bg-surface-2 overflow-hidden">
         {src && (
           <SmartImage
@@ -92,11 +94,11 @@ export default function ProductCard({ product, locale }: { product: ProductForCa
         <Link href={`/${locale}/products/${product.slug}`} aria-label={name} className="absolute inset-0 z-10" />
       </div>
 
-      <div className="p-3">
-        <p className="text-ink text-sm font-bold truncate" title={name}>
+      <div className="p-3.5">
+        <p className="text-ink text-[15px] font-semibold leading-snug truncate" title={name}>
           {name}
         </p>
-        {sub && <p className="text-muted text-xs mt-0.5 truncate">{sub}</p>}
+        {sub && <p className="text-muted text-xs mt-1 truncate">{sub}</p>}
       </div>
     </div>
   );

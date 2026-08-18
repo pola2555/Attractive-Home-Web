@@ -190,8 +190,8 @@ export default async function CatalogPage({
               </div>
             ) : (
               <div
-                className="grid gap-[18px]"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))' }}
+                className="grid gap-5"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}
               >
                 {products.map((product) => (
                   <ProductCard key={product.slug} product={product} locale={locale} />
