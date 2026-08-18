@@ -367,3 +367,22 @@ export async function shopRepImages(): Promise<{
     application: toMap(applications),
   };
 }
+
+// Primary-image lookup for admin-picked Shop-by tiles (productId → image).
+export async function pickRepImages(productIds: string[]): Promise<Map<string, RepImage>> {
+  if (productIds.length === 0) return new Map();
+  const rows = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    select: {
+      id: true,
+      source: { select: { code: true } },
+      images: { where: { sortOrder: 0 }, take: 1, select: { s3Key: true, thumbKey: true } },
+    },
+  });
+  const map = new Map<string, RepImage>();
+  for (const r of rows) {
+    const img = r.images[0];
+    if (img) map.set(r.id, { s3Key: img.s3Key, thumbKey: img.thumbKey, sourceCode: r.source.code });
+  }
+  return map;
+}

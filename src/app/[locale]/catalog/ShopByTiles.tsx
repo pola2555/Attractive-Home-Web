@@ -1,12 +1,15 @@
 import Link from 'next/link';
 import { productMediaUrl } from '@/lib/media';
 import type { CatalogFilters, FacetKey, FacetValue, RepImage } from '@/lib/catalog';
+import type { ShopBySection, ShopKey } from '@/lib/catalogShopByConfig';
 import { catalogHref } from './FiltersSidebar';
 
-// "Shop by …" browse tiles — shown above the grid when no facet/search is
-// active (mirrors the old catalog landing). Tiles are ranked by count and link
-// into the filtered catalog. Colour renders as swatches; the rest as image
-// tiles with a dark gradient overlay.
+// "Shop by …" browse tiles — shown above the grid on the unfiltered landing.
+// Which sections show, their order, how many cards each shows, the card order,
+// and the per-card tile image are all driven by the admin config
+// (settings['catalog.shopby']); with no config it mirrors the old behaviour
+// (ranked by count, auto-picked image). Colour renders as swatches; the rest as
+// image tiles with a dark gradient overlay.
 
 type ShopReps = {
   type: Map<string, RepImage>;
@@ -15,46 +18,56 @@ type ShopReps = {
   application: Map<string, RepImage>;
 };
 
-const SECTIONS: { key: Extract<FacetKey, 'application' | 'look' | 'color' | 'type' | 'collection'>; limit: number; color?: boolean }[] = [
-  { key: 'application', limit: 8 },
-  { key: 'look', limit: 10 },
-  { key: 'color', limit: 30, color: true },
-  { key: 'type', limit: 8 },
-  { key: 'collection', limit: 8 },
-];
+// Manual-order prefix, then count order for everything else.
+function orderValues(values: FacetValue[], order: string[]): FacetValue[] {
+  if (!order.length) return [...values].sort((a, b) => b.count - a.count);
+  const idx = new Map(order.map((code, i) => [code, i]));
+  return [...values].sort((a, b) => {
+    const ai = idx.has(a.code) ? (idx.get(a.code) as number) : Infinity;
+    const bi = idx.has(b.code) ? (idx.get(b.code) as number) : Infinity;
+    if (ai !== bi) return ai - bi;
+    return b.count - a.count;
+  });
+}
 
 export default function ShopByTiles({
   locale,
   filters,
   facets,
+  sections,
   reps,
+  pickImages,
   labels,
 }: {
   locale: string;
   filters: CatalogFilters;
   facets: Record<FacetKey, FacetValue[]>;
+  sections: ShopBySection[];
   reps: ShopReps;
-  labels: Record<'application' | 'look' | 'color' | 'type' | 'collection', string>;
+  pickImages: Map<string, RepImage>;
+  labels: Record<ShopKey, string>;
 }) {
   return (
     <div className="mb-10 space-y-6">
-      {SECTIONS.map(({ key, limit, color }) => {
-        const values = [...facets[key]].sort((a, b) => b.count - a.count).slice(0, limit);
+      {sections.map((section) => {
+        if (!section.visible) return null;
+        const isColor = section.key === 'color';
+        const values = orderValues(facets[section.key], section.order).slice(0, section.limit);
         if (values.length === 0) return null;
-        const repMap = color ? null : (reps[key as keyof ShopReps] as Map<string, RepImage>);
+        const repMap = isColor ? null : (reps[section.key as keyof ShopReps]);
 
         return (
-          <section key={key}>
-            <h2 className="text-heading font-extrabold text-[15px] mt-2 mb-2.5">{labels[key]}</h2>
+          <section key={section.key}>
+            <h2 className="text-heading font-extrabold text-[15px] mt-2 mb-2.5">{labels[section.key]}</h2>
             <div
               className="grid gap-3"
               style={{
-                gridTemplateColumns: `repeat(auto-fill, minmax(${color ? '96px' : '150px'}, 1fr))`,
+                gridTemplateColumns: `repeat(auto-fill, minmax(${isColor ? '96px' : '160px'}, 1fr))`,
               }}
             >
               {values.map((value) => {
-                const href = catalogHref(locale, filters, { [key]: [value.code] });
-                if (color) {
+                const href = catalogHref(locale, filters, { [section.key]: [value.code] });
+                if (isColor) {
                   return (
                     <Link
                       key={value.code}
@@ -69,8 +82,9 @@ export default function ShopByTiles({
                     </Link>
                   );
                 }
-                const rep = repMap?.get(value.code);
-                const url = rep ? productMediaUrl(rep.thumbKey ?? rep.s3Key, rep.sourceCode) : null;
+                const pickId = section.picks[value.code];
+                const rep = (pickId && pickImages.get(pickId)) || repMap?.get(value.code);
+                const url = rep ? productMediaUrl(rep.s3Key, rep.sourceCode) : null;
                 return (
                   <Link
                     key={value.code}

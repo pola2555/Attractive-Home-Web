@@ -8,6 +8,7 @@ import {
   facetValues,
   queryProducts,
   shopRepImages,
+  pickRepImages,
   CATALOG_PAGE_SIZE,
   PER_PAGE_OPTIONS,
   FACET_KEYS,
@@ -15,6 +16,12 @@ import {
   type CatalogSort,
 } from '@/lib/catalog';
 import { getCatalogFilterConfig } from '@/lib/catalogConfig';
+import {
+  getShopByConfig,
+  pickedProductIds,
+  SHOP_KEYS,
+  type ShopKey,
+} from '@/lib/catalogShopByConfig';
 import { alternates } from '@/lib/seo';
 import ProductCard from '@/components/ProductCard';
 import FiltersSidebar, { catalogHref } from './FiltersSidebar';
@@ -53,13 +60,26 @@ export default async function CatalogPage({
   // Browse tiles only make sense on the unfiltered landing view.
   const showShopBy = !FACET_KEYS.some((k) => filters[k]?.length) && !filters.q;
 
-  const [dict, facets, { total, products }, reps, filterConfig] = await Promise.all([
+  const [dict, facets, { total, products }, reps, filterConfig, shopByConfig] = await Promise.all([
     getDictionary(locale, 'catalog'),
     facetValues(locale, filters),
     queryProducts(locale, filters),
     showShopBy ? shopRepImages() : Promise.resolve(null),
     getCatalogFilterConfig(),
+    getShopByConfig(),
   ]);
+  const pickImages = showShopBy ? await pickRepImages(pickedProductIds(shopByConfig)) : new Map();
+
+  const shopLabels: Record<ShopKey, string> = {
+    application: t(dict, 'shop.application'),
+    look: t(dict, 'shop.look'),
+    color: t(dict, 'shop.color'),
+    type: t(dict, 'shop.type'),
+    collection: t(dict, 'shop.collection'),
+  };
+  const shopFacets = Object.fromEntries(
+    SHOP_KEYS.map((k) => [k, facets[k].map((v) => ({ code: v.code, name: v.name, count: v.count }))]),
+  ) as Record<ShopKey, { code: string; name: string; count: number }[]>;
 
   // Labels default to the i18n facet name; the admin config can override each.
   const baseFacetLabels = Object.fromEntries(
@@ -135,14 +155,10 @@ export default async function CatalogPage({
                 locale={locale}
                 filters={filters}
                 facets={facets}
+                sections={shopByConfig}
                 reps={reps}
-                labels={{
-                  application: t(dict, 'shop.application'),
-                  look: t(dict, 'shop.look'),
-                  color: t(dict, 'shop.color'),
-                  type: t(dict, 'shop.type'),
-                  collection: t(dict, 'shop.collection'),
-                }}
+                pickImages={pickImages}
+                labels={shopLabels}
               />
             )}
             <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 mb-6">
@@ -228,7 +244,13 @@ export default async function CatalogPage({
         </div>
 
         {/* Staff-only in-context layout editor (renders nothing for shoppers). */}
-        <CatalogEditor initialConfig={filterConfig} labels={baseFacetLabels} />
+        <CatalogEditor
+          initialConfig={filterConfig}
+          labels={baseFacetLabels}
+          initialShopBy={shopByConfig}
+          shopFacets={shopFacets}
+          shopLabels={shopLabels}
+        />
       </div>
     </section>
   );

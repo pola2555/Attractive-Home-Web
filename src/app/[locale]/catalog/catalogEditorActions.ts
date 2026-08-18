@@ -11,6 +11,12 @@ import {
   normalizeCatalogFilters,
   type CatalogFilterEntry,
 } from '@/lib/catalogConfig';
+import {
+  SHOPBY_KEY,
+  shopBySchema,
+  normalizeShopBy,
+  type ShopBySection,
+} from '@/lib/catalogShopByConfig';
 
 // Server action behind the in-context catalog editor. Same persistence as the
 // dashboard Catalog-filters screen (settings['catalog.filters']), but callable
@@ -47,5 +53,35 @@ export async function saveCatalogFilterConfig(config: CatalogFilterEntry[]): Pro
   });
 
   revalidatePath('/', 'layout'); // catalog pages regenerate with the new sidebar
+  return { ok: true };
+}
+
+export async function saveShopByConfig(sections: ShopBySection[]): Promise<SaveResult> {
+  const user = await requirePermission('catalog.write');
+
+  const parsed = shopBySchema.safeParse(sections);
+  if (!parsed.success) return { ok: false, error: 'The Shop-by configuration is invalid.' };
+  const normalized = normalizeShopBy(parsed.data);
+
+  await prisma.setting.upsert({
+    where: { key: SHOPBY_KEY },
+    update: { value: normalized as unknown as Prisma.InputJsonValue, updatedBy: user.id },
+    create: { key: SHOPBY_KEY, value: normalized as unknown as Prisma.InputJsonValue, updatedBy: user.id },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'settings',
+    entityId: SHOPBY_KEY,
+    action: 'update',
+    diff: {
+      shopby: {
+        from: null,
+        to: normalized.map((s) => `${s.key}:${s.visible ? s.limit : 'hidden'}`).join(','),
+      },
+    },
+  });
+
+  revalidatePath('/', 'layout');
   return { ok: true };
 }
