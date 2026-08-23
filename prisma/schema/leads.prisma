@@ -26,7 +26,8 @@ model Lead {
   project  Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   assignee User?    @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
 
-  notes LeadNote[]
+  notes  LeadNote[]
+  quotes Quote[]
 
   @@index([createdAt(sort: Desc)])
   @@index([assignedTo])

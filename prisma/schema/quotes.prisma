@@ -1,0 +1,262 @@
+// docs/DATABASE.md §10 — module: quotes. §10 pre-authorised exactly this:
+// "add quotes (id, lead_id NULL, user_id, status, currency, totals…) +
+//  quote_items (quote_id, product_id, qty, unit_price, name_snapshot…).
+//  Snapshots decouple history from live edits; leads.product_id already
+//  captures intent. Zero changes to existing tables."
+//
+// A quote is the staff-side cart: configured items assembled, then costed
+// through the China → UAE import chain. Customers never see any of it — they
+// submit a request (which creates a Lead plus a draft quote) and the team
+// prices it.
+//
+// Hand-added SQL in the quotes migration (Prisma can't express it):
+//   CREATE SEQUENCE quote_reference_seq   -- reference generation without a race
+//   PARTIAL index (status, created_at DESC) WHERE status NOT IN ('accepted','rejected','expired')
+
+model Quote {
+  id String @id @db.Uuid
+
+  // 'Q-2026-0001'. Drawn from a Postgres SEQUENCE rather than
+  // MAX(reference)+1, which races the moment two people create a quote at once
+  // and then fails on the UNIQUE constraint.
+  reference String @unique
+
+  // 'draft' | 'costing' | 'sent' | 'accepted' | 'rejected' | 'expired'.
+  // Plain string, NOT a 6th global enum — customers.prisma spells out the
+  // precedent. The zod union in src/lib/quotesAdmin.ts is the source of truth.
+  status String @default("draft")
+
+  leadId     String? @map("lead_id") @db.Uuid
+  customerId String? @map("customer_id") @db.Uuid
+  createdBy  String? @map("created_by") @db.Uuid
+  assignedTo String? @map("assigned_to") @db.Uuid
+
+  quoteCurrency String @default("AED") @map("quote_currency") @db.Char(3)
+
+  // Snapshot of the rates used, e.g. {"USD": 3.6725, "CNY": 0.5163} as units of
+  // quoteCurrency per 1 foreign unit. Snapshotted, not looked up live, so a
+  // later FX move cannot retroactively rewrite a quote that was already sent.
+  fxRates   Json?     @map("fx_rates")
+  fxRatesAt DateTime? @map("fx_rates_at") @db.Timestamptz(6)
+
+  // Widens the estimate band on top of the per-component low/high. There is
+  // deliberately NO margin_percent column: margin is a `margin`-stage pricing
+  // rule, which is strictly more general (it can be conditional, per-template,
+  // per-product) and keeps one code path for all uplift.
+  contingencyPercent Decimal @default(0) @map("contingency_percent") @db.Decimal(6, 3)
+
+  title      String?
+  notes      String?
+  validUntil DateTime? @map("valid_until") @db.Date
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  creator  User?     @relation("QuoteCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  assignee User?     @relation("QuoteAssignedTo", fields: [assignedTo], references: [id], onDelete: SetNull)
+
+  items    QuoteItem[]
+  shipment Shipment?
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([assignedTo])
+  @@index([leadId])
+  @@index([customerId])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id        String @id @db.Uuid
+  quoteId   String @map("quote_id") @db.Uuid
+  sortOrder Int    @map("sort_order")
+
+  productId  String? @map("product_id") @db.Uuid
+  templateId String? @map("template_id") @db.Uuid
+
+  // Per-item override; falls back to the product's HS code, then to the
+  // settings default. Duty is computed PER HS CODE PER ITEM — a mixed container
+  // carries two duty rates, which is the normal case, and a single
+  // shipment-level duty line cannot express it.
+  hsCodeId String? @map("hs_code_id") @db.Uuid
+
+  quantity Decimal @default(1) @db.Decimal(12, 3)
+
+  // §10's "snapshots decouple history from live edits". Renaming or deleting
+  // the product must not rewrite a quote that was already sent.
+  nameSnapshot String  @map("name_snapshot")
+  codeSnapshot String? @map("code_snapshot")
+
+  // Self-describing by design: [{groupCode, valueCode, valueId, numericValue}].
+  // JSONB has no FK, so storing bare ids would leave dangling references the
+  // moment an option value is hard-deleted (§1: no soft delete). Carrying the
+  // code AND the id means re-pricing can fall back to a code lookup, and the
+  // label stays readable even when both are gone. Accessory cardinality lives
+  // here too: {accessories: [{value: 'hinge', qty: 3}]}.
+  selection      Json
+  selectionLabel String? @map("selection_label") // '45mm × 2100 × 900, Oak'
+
+  // Computed by the formula evaluator: {area_m2: 1.89, weight_kg: 42.3}.
+  // A null entry means the formula failed and the item needs review — never
+  // silently 0, because a weight of 0 makes freight free.
+  derived Json?
+
+  unitCost     Decimal? @map("unit_cost") @db.Decimal(12, 2)
+  costCurrency String?  @map("cost_currency") @db.Char(3)
+
+  // Goods + apportioned freight/insurance + this item's own duty, per unit, in
+  // the quote currency. This is the number the business actually asks for:
+  // "what do I sell this door for", as opposed to "what does the container
+  // cost".
+  landedUnitCost Decimal? @map("landed_unit_cost") @db.Decimal(12, 2)
+
+  // [{ruleCode, stage, basis, amount, contribution}] — the audit trail for how
+  // unitCost was reached.
+  priceBreakdown Json? @map("price_breakdown")
+
+  priced_at DateTime? @map("priced_at") @db.Timestamptz(6)
+
+  // Hash of the rule rows that were applied. On load, a mismatch against the
+  // current rules shows a "pricing changed since this was priced — re-price?"
+  // banner. That is deliberately a banner and not a rule-versioning table: it
+  // answers "is this stale" without the cost of immutable rule versions.
+  pricingInputsHash String? @map("pricing_inputs_hash")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  quote    Quote           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product  Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  template ConfigTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  hsCode   HsCode?         @relation(fields: [hsCodeId], references: [id], onDelete: SetNull)
+
+  @@index([quoteId, sortOrder])
+  @@index([productId])
+  @@index([templateId])
+  @@index([hsCodeId])
+  @@map("quote_items")
+}
+
+// ---------------------------------------------------------------------------
+// Landed cost
+// ---------------------------------------------------------------------------
+
+model Shipment {
+  id String @id @db.Uuid
+
+  // UNIQUE for now. The table is already the right long-term 1:N shape; the
+  // constraint comes off when splitting one quote across several shipments is
+  // an actual requirement. Until then, making every screen answer "which
+  // shipment?" is complexity for a feature nobody asked for.
+  quoteId String @unique @map("quote_id") @db.Uuid
+
+  // 'sea_lcl' | 'sea_fcl' | 'air' — plain string, see Quote.status.
+  mode String @default("sea_lcl")
+
+  originPort      String @default("CNSHA") @map("origin_port") @db.VarChar(10)
+  destinationPort String @default("AEJEA") @map("destination_port") @db.VarChar(10)
+
+  // INFORMATIONAL ONLY, and labelled as such in the UI. A real incoterm
+  // determines who pays freight and who is importer of record (EXW/FOB/CIF/DDP
+  // move whole cost blocks between the parties). Wiring that properly is a
+  // project of its own; the calculator hardcodes the FOB-China assumption. A
+  // half-wired incoterm that LOOKS like logic is worse than an honest label.
+  incoterm String @default("FOB")
+
+  containerType  String? @map("container_type")
+  containerCount Int?    @map("container_count")
+
+  // Rolled up from the items by default. `isManualOverride` records that a
+  // human replaced the computed figure — packing efficiency is judgement, and
+  // without the flag nobody can tell a deliberate number from a stale one.
+  volumeCbm        Decimal? @map("volume_cbm") @db.Decimal(12, 3)
+  grossWeightKg    Decimal? @map("gross_weight_kg") @db.Decimal(12, 3)
+  isManualOverride Boolean  @default(false) @map("is_manual_override")
+
+  // NOTE: chargeable weight is deliberately NOT a column. It is a pure function
+  // of (mode, gross, CBM, divisor, rounding) and storing it invites drift —
+  // edit volumeCbm and a stale column keeps pricing. It is also not one
+  // quantity: air bills chargeable KG (rounded up to the next 0.5), sea LCL
+  // bills a revenue ton max(CBM, tonnes) with a 1 W/M minimum, and FCL has no
+  // chargeable weight at all. It is recomputed on demand and persisted only
+  // inside the freight component's `basis` JSONB, which is already a snapshot
+  // of how that number was reached.
+
+  estimatedTransitDays Int?      @map("estimated_transit_days")
+  expectedStorageDays  Int       @default(0) @map("expected_storage_days")
+  etd                  DateTime? @db.Date
+  eta                  DateTime? @db.Date
+  notes                String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  quote      Quote           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  components CostComponent[]
+
+  @@map("shipments")
+}
+
+// One row per charge in the landed-cost ledger.
+model CostComponent {
+  id         String @id @db.Uuid
+  shipmentId String @map("shipment_id") @db.Uuid
+
+  // 'goods' | 'freight' | 'insurance' | 'customs_duty' | 'vat' | 'port_storage'
+  // | 'handling' | 'inland' | 'documentation' | 'thc' | 'other'.
+  // Plain string, never an enum: finance WILL extend this (Mirsal-2 declaration
+  // fee, CFS charge, delivery order fee, inspection…), and the `other` + label
+  // escape hatch is the tell. §1's rule sends anything admins might extend to a
+  // lookup table — which is what this becomes if the labels ever need
+  // translating. An enum would make every addition a migration.
+  kind  String
+  label String
+
+  // 'manual' | 'rate_card' | 'api' — plus which adapter produced it, so a
+  // number can always be traced to its origin.
+  source       String  @default("manual")
+  providerCode String? @map("provider_code")
+
+  // §1 money: NUMERIC(12,2). `amount` is the expected figure; low/high are the
+  // band. IMPORTANT: the roll-up must NEVER sum these columns independently —
+  // Σlow over ten components describes a shipment that cannot physically exist
+  // (air freight's floor plus sea storage's floor) and has ~0 probability.
+  // computeLanded() runs end-to-end once per scenario, recomputing every
+  // percentage from that scenario's own base. See src/lib/landed/compute.ts.
+  amount     Decimal  @db.Decimal(12, 2)
+  amountLow  Decimal? @map("amount_low") @db.Decimal(12, 2)
+  amountHigh Decimal? @map("amount_high") @db.Decimal(12, 2)
+  currency   String   @default("AED") @db.Char(3)
+
+  // Whether this line forms part of the CIF value that duty is charged on.
+  // True for goods / freight / insurance ONLY. Post-import charges (handling,
+  // inland, port storage) must be excluded, or they inflate BOTH duty and VAT.
+  // A boolean rather than a hardcoded `kind` ordering inside the calculator,
+  // where it would be folklore nobody can find.
+  inCustomsBase Boolean @default(false) @map("in_customs_base")
+
+  // A VAT-registered importer reverse-charges import VAT on the return: it is
+  // cash flow, not cost. Booking it as cost overstates every quote by 5%. The
+  // UI reports "landed cost" and "cash outlay" separately so either treatment
+  // is one setting away (settings['landed.vat_recoverable']).
+  isRecoverable Boolean @default(false) @map("is_recoverable")
+
+  // Locked = a real invoice, not an estimate. Locking narrows the band to a
+  // point and stops any provider from overwriting it.
+  isLocked Boolean @default(false) @map("is_locked")
+
+  // How this number was reached: the rate row used, the chargeable quantity,
+  // the per-HS-code duty breakdown. Never recomputed for display — this IS the
+  // record of what happened.
+  basis Json?
+
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, sortOrder])
+  @@map("cost_components")
+}

@@ -45,6 +45,7 @@ enum LeadChannel {
   contact_form
   whatsapp
   visualizer
+  quote_request
   other
 
   @@map("lead_channel")
@@ -91,6 +92,8 @@ model Locale {
   projectMediaTranslations         ProjectMediaTranslation[]
   serviceTranslations              ServiceTranslation[]
   contentBlockTranslations         ContentBlockTranslation[]
+  optionGroupTranslations          OptionGroupTranslation[]
+  optionValueTranslations          OptionValueTranslation[]
   leads                            Lead[]
 
   @@map("locales")

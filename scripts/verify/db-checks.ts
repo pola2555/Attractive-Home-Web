@@ -218,11 +218,137 @@ async function leadChecks() {
   }
 }
 
+// Configurator / quotes / landed cost — the hand-written SQL in migration 3,
+// which Prisma cannot express and therefore cannot verify for us.
+async function quotingChecks() {
+  console.log('\nconfigurator + quotes:');
+
+  const template = await prisma.configTemplate.findUnique({ where: { code: 'door' } });
+  report(!!template, "seeded 'door' template exists");
+  if (!template) return;
+
+  // The XOR that stops a rule silently applying twice.
+  const product = await prisma.product.findFirst({ select: { id: true } });
+  let xorFired = false;
+  try {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO pricing_rules (id, template_id, product_id, code, stage, priority, basis, apply_per, is_active, created_at, updated_at)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, 'both_set', 'base', 1, 'flat', 'unit', true, now(), now())`,
+      uuidv7(),
+      template.id,
+      product?.id ?? template.id,
+    );
+  } catch (error) {
+    xorFired = String(error).includes('pricing_rules_scope_check');
+  }
+  report(xorFired, 'pricing_rules XOR scope CHECK rejects template_id AND product_id');
+
+  // A rule scoped to neither must fail the same way.
+  let nullFired = false;
+  try {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO pricing_rules (id, code, stage, priority, basis, apply_per, is_active, created_at, updated_at)
+       VALUES ($1::uuid, 'neither_set', 'base', 1, 'flat', 'unit', true, now(), now())`,
+      uuidv7(),
+    );
+  } catch (error) {
+    nullFired = String(error).includes('pricing_rules_scope_check');
+  }
+  report(nullFired, 'pricing_rules XOR scope CHECK rejects an unscoped rule');
+
+  // Reference generation must not depend on MAX()+1.
+  const seq = await prisma.$queryRawUnsafe<{ n: string }[]>(
+    `SELECT nextval('quote_reference_seq')::text AS n`,
+  );
+  report(Number(seq[0]?.n) > 0, 'quote_reference_seq issues references', `nextval=${seq[0]?.n}`);
+
+  // A nonsense duty rate must not be storable.
+  let dutyFired = false;
+  try {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO hs_codes (id, code, description, duty_percent, vat_percent, is_active, created_at, updated_at)
+       VALUES ($1::uuid, 'BAD.01', 'bad rate', 900, 5, true, now(), now())`,
+      uuidv7(),
+    );
+  } catch (error) {
+    dutyFired = String(error).includes('hs_codes_duty_percent_check');
+  }
+  report(dutyFired, 'hs_codes duty_percent CHECK rejects 900%');
+
+  // The tree, the constraint and the chained formulas all made it in.
+  const options = await prisma.configTemplateOption.count({ where: { templateId: template.id } });
+  report(options === 8, "'door' template binds 8 option groups", `found ${options}`);
+
+  const gated = await prisma.configTemplateOptionValue.count({
+    where: { templateOption: { templateId: template.id }, NOT: { condition: { equals: null } } },
+  });
+  report(gated > 0, 'at least one option value is gated by a condition', `found ${gated}`);
+
+  const ranged = await prisma.configTemplateOption.count({
+    where: { templateId: template.id, NOT: { ranges: { equals: null } } },
+  });
+  report(ranged >= 3, 'conditional numeric ranges present', `found ${ranged}`);
+
+  const constraints = await prisma.configTemplateConstraint.count({
+    where: { templateId: template.id },
+  });
+  report(constraints >= 1, 'cross-group constraint present', `found ${constraints}`);
+
+  const derived = await prisma.configDerivedQuantity.findMany({
+    where: { templateId: template.id },
+    orderBy: { sortOrder: 'asc' },
+    select: { code: true, formula: true, sortOrder: true },
+  });
+  report(
+    derived.length === 3,
+    'three chained derived quantities',
+    derived.map((d) => d.code).join(' -> '),
+  );
+
+  // The DAG rule the save action enforces: a formula may only look backwards.
+  const seen = new Set<string>();
+  let forwardRef = false;
+  for (const quantity of derived) {
+    for (const other of derived) {
+      if (other.code === quantity.code) continue;
+      const referenced = new RegExp(`\\b${other.code}\\b`).test(quantity.formula);
+      if (referenced && !seen.has(other.code)) forwardRef = true;
+    }
+    seen.add(quantity.code);
+  }
+  report(!forwardRef, 'no derived quantity references a later one (DAG holds)');
+
+  // The security boundary: data-entry must not reach cost basis.
+  const dataEntry = await prisma.role.findUnique({
+    where: { slug: 'data-entry' },
+    select: { rolePermissions: { select: { permission: { select: { slug: true } } } } },
+  });
+  const dataEntrySlugs = new Set(dataEntry?.rolePermissions.map((rp) => rp.permission.slug) ?? []);
+  report(
+    !dataEntrySlugs.has('pricing.write') && !dataEntrySlugs.has('quotes.read'),
+    'data-entry role cannot see pricing or quotes',
+  );
+
+  const sales = await prisma.role.findUnique({
+    where: { slug: 'sales' },
+    select: { rolePermissions: { select: { permission: { select: { slug: true } } } } },
+  });
+  const salesSlugs = new Set(sales?.rolePermissions.map((rp) => rp.permission.slug) ?? []);
+  report(
+    salesSlugs.has('quotes.write') && !salesSlugs.has('pricing.write'),
+    'sales role can quote but cannot edit pricing rules',
+  );
+
+  await prisma.pricingRule.deleteMany({ where: { code: { in: ['both_set', 'neither_set'] } } });
+  await prisma.hsCode.deleteMany({ where: { code: 'BAD.01' } });
+}
+
 async function main() {
   await spotChecks();
   await queryDrills();
   await rbacChecks();
   await leadChecks();
+  await quotingChecks();
   console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;
 }

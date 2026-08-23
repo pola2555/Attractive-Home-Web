@@ -7,6 +7,8 @@ import { seedLocales } from './locales';
 import { seedRbac, seedAdminUser } from './rbac';
 import { seedSettings } from './settings';
 import { seedContentBlocks } from './content-blocks';
+import { seedLanded } from './landed';
+import { seedConfigurator } from './configurator';
 
 const prisma = new PrismaClient();
 
@@ -17,6 +19,8 @@ async function main(): Promise<void> {
   await seedAdminUser(prisma);
   await seedSettings(prisma);
   await seedContentBlocks(prisma);
+  await seedLanded(prisma);
+  await seedConfigurator(prisma);
   console.log('Seed complete.');
 }
 

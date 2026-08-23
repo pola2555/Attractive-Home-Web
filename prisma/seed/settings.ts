@@ -64,7 +64,8 @@ const SETTINGS: { key: string; value: Prisma.InputJsonValue; description: string
   {
     key: 'analytics.ga4_id',
     value: '',
-    description: 'GA4 measurement id (G-XXXXXXXXXX) — used as a direct tag only when no GTM id is set',
+    description:
+      'GA4 measurement id (G-XXXXXXXXXX) — used as a direct tag only when no GTM id is set',
   },
   {
     key: 'tracking.meta_pixel_id',
@@ -74,7 +75,56 @@ const SETTINGS: { key: string; value: Prisma.InputJsonValue; description: string
   {
     key: 'seo.google_verification',
     value: '',
-    description: 'Google Search Console verification token (renders the meta tag; DNS TXT is primary)',
+    description:
+      'Google Search Console verification token (renders the meta tag; DNS TXT is primary)',
+  },
+  // Landed cost (China -> UAE). Every key has a safe default so quoting works
+  // before anyone opens the settings screen, and every read goes through
+  // schema.catch(default).parse() so a bad edit degrades instead of breaking
+  // the quote page.
+  {
+    key: 'landed.fx_rates',
+    value: { USD: 3.6725, CNY: 0.5163, EUR: 4.0, AED: 1 },
+    description:
+      'Units of AED per 1 foreign unit. Snapshotted onto each quote at creation, so later moves never rewrite a quote already sent. AED is pegged to USD at 3.6725.',
+  },
+  {
+    key: 'landed.vat_recoverable',
+    value: true,
+    description:
+      'True when the importer is UAE VAT-registered, so import VAT is reverse-charged on the return: cash flow, not cost. Set false only if VAT is genuinely a sunk cost — it changes every quote by 5%.',
+  },
+  {
+    key: 'landed.insurance_percent',
+    value: 0.5,
+    description: 'Marine insurance as a percentage of goods value (typical 0.3-0.8%)',
+  },
+  {
+    key: 'landed.contingency_percent',
+    value: 7.5,
+    description: 'Default width of the high estimate band on a new quote, in percent',
+  },
+  {
+    key: 'landed.default_hs_code',
+    value: '',
+    description:
+      'HS code used when neither the quote item nor the product names one (blank = flag for review)',
+  },
+  {
+    key: 'landed.freight_provider',
+    value: 'rate_card',
+    description:
+      'Which adapter prices freight. "rate_card" reads freight_rates. A real API is a new file in src/lib/landed/providers/ named here — never a migration.',
+  },
+  {
+    key: 'landed.customs_provider',
+    value: 'rate_card',
+    description: 'Which adapter prices customs duty and VAT. "rate_card" reads hs_codes.',
+  },
+  {
+    key: 'landed.storage_provider',
+    value: 'rate_card',
+    description: 'Which adapter prices port storage. "rate_card" reads port_storage_rates.',
   },
 ];
 

@@ -1,0 +1,116 @@
+// docs/DATABASE.md — module: landed cost (net-new).
+//
+// Rate tables for the China → UAE import chain. These serve two purposes at
+// once: they make landed cost computable TODAY with no external service, and
+// their column set IS the contract a future freight / customs / port-storage
+// API adapter has to satisfy. Adding a real API is a new file in
+// src/lib/landed/providers/ implementing the same types — never a migration.
+//
+// Everything here is a rate, not a transaction. The actual charges that land on
+// a quote live in `cost_components` (quotes.prisma), which records which
+// provider produced each number and whether it is still an estimate.
+
+// ---------------------------------------------------------------------------
+// Customs — جمارك
+// ---------------------------------------------------------------------------
+
+// UUID PK, not a natural PK on `code`: §2 lists the exceptions exhaustively
+// (`locales`, `settings`) and this is not one of them. Products reference it by
+// FK rather than by free text, because a typo'd HS code as TEXT silently yields
+// 0% duty — an under-quote nobody notices.
+model HsCode {
+  id          String  @id @db.Uuid
+  code        String  @unique @db.VarChar(12) // '4418.20' — GCC tariff heading
+  description String
+  // GCC common external tariff is 5% on most goods; some categories are exempt
+  // or rated differently, which is the whole reason this is a table.
+  dutyPercent Decimal @default(5) @map("duty_percent") @db.Decimal(6, 3)
+  vatPercent  Decimal @default(5) @map("vat_percent") @db.Decimal(6, 3)
+  notes       String?
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  products   Product[]
+  quoteItems QuoteItem[]
+
+  @@map("hs_codes")
+}
+
+// ---------------------------------------------------------------------------
+// Freight
+// ---------------------------------------------------------------------------
+
+model FreightRate {
+  id String @id @db.Uuid
+
+  // 'sea_lcl' | 'sea_fcl' | 'air' — plain string, not a 6th global enum
+  // (customers.prisma `purpose` precedent).
+  mode String
+
+  originPort      String  @map("origin_port") @db.VarChar(10) // 'CNSHA'
+  destinationPort String  @map("destination_port") @db.VarChar(10) // 'AEJEA'
+  containerType   String? @map("container_type") // '20GP' | '40GP' | '40HQ' — FCL only
+
+  // What the rate is per. NOT interchangeable across modes:
+  //   'wm'        revenue ton, max(CBM, tonnes) — sea LCL
+  //   'container' per container — sea FCL
+  //   'kg'        chargeable kg — air
+  unit String
+
+  rate         Decimal  @db.Decimal(12, 2)
+  rateLow      Decimal? @map("rate_low") @db.Decimal(12, 2)
+  rateHigh     Decimal? @map("rate_high") @db.Decimal(12, 2)
+  minCharge    Decimal? @map("min_charge") @db.Decimal(12, 2)
+  currency     String   @default("USD") @db.Char(3)
+  transitDays  Int?     @map("transit_days")
+
+  // Volumetric divisor is a CARRIER CONTRACT PARAMETER, not a constant: IATA
+  // general cargo uses 6000 cm³/kg, express carriers use 5000. Hardcoding it
+  // means the first real airline quote won't reconcile and someone edits a
+  // number in a .ts file to make it match.
+  volumetricDivisor Int? @map("volumetric_divisor")
+
+  // Carriers charge for crating and pallets, so shipping weight exceeds the
+  // product weight the configurator derives from density × volume. Typically
+  // 1.08–1.15. Omitting it under-quotes freight on every single quote.
+  packagingFactor Decimal @default(1.10) @map("packaging_factor") @db.Decimal(6, 3)
+
+  validFrom DateTime? @map("valid_from") @db.Date
+  validTo   DateTime? @map("valid_to") @db.Date
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([mode, originPort, destinationPort, isActive])
+  @@map("freight_rates")
+}
+
+// ---------------------------------------------------------------------------
+// Port storage
+// ---------------------------------------------------------------------------
+
+// Deliberately simple: free days plus a flat per-day rate. Real terminal
+// tariffs are tiered (days 1-5 at one rate, 6-10 at another) and vary by
+// terminal, container size and reefer/dry — but storage only accrues when
+// something goes WRONG, is the least predictable component, and is most often
+// zero. The tier table gets built when the client produces an actual terminal
+// tariff sheet; until then a tiered JSONB column would be invented numbers
+// wearing a precise-looking shape.
+model PortStorageRate {
+  id            String  @id @db.Uuid
+  port          String  @db.VarChar(10) // 'AEJEA'
+  containerType String? @map("container_type") // NULL = applies to LCL / any
+
+  freeDays   Int     @default(5) @map("free_days")
+  perDayRate Decimal @map("per_day_rate") @db.Decimal(12, 2)
+  currency   String  @default("AED") @db.Char(3)
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([port, containerType])
+  @@map("port_storage_rates")
+}

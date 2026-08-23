@@ -1,0 +1,326 @@
+// docs/DATABASE.md — module: configurator (net-new).
+//
+// A product is not always one price. A door is a CHAIN of choices — thickness,
+// height, width, material, then a DERIVED weight, then colour, then optional
+// accessories — where later choices are constrained by earlier ones and each
+// may or may not move the cost. This module stores that chain; `src/lib/
+// configurator/` evaluates it. Prices here are INTERNAL ONLY: customers never
+// see them (see the `pricing.write` permission, deliberately separate from
+// `catalog.write`).
+//
+// WHY EAV HERE, WHEN §10 REJECTED IT FOR THE CATALOG
+// §10's objection was specific: generic EAV "kills typed relations/FKs, turns
+// filters into N self-joins", and catalog facet churn is demonstrably low. Both
+// premises are inverted here — the option vocabulary genuinely differs per
+// product template (a door and a worktop share almost nothing) and it is never
+// queried as a filter. THE BOUNDARY IS THE CONDITION OF THE EXCEPTION:
+// option_groups/option_values are staff-only and MUST NEVER become a public
+// catalog filter. The moment they do, §10's N-self-joins outcome is back and
+// the facet-lookup tables are the right home instead.
+//
+// Hand-added SQL in the configurator migration (Prisma can't express it):
+//   CHECK (num_nonnulls(template_id, product_id) = 1) on pricing_rules
+
+// ---------------------------------------------------------------------------
+// Option vocabulary
+// ---------------------------------------------------------------------------
+
+model OptionGroup {
+  id        String   @id @db.Uuid
+  code      String   @unique // 'thickness', 'height', 'material', 'color'
+  // Bounded and code-driven, but a plain string, NOT a 6th global enum —
+  // the `customer_email_tokens.purpose` precedent (customers.prisma). The zod
+  // union in src/lib/configurator/schema.ts is the source of truth:
+  // 'select' | 'number' | 'multi_select' | 'boolean'
+  inputKind String   @map("input_kind")
+  unit      String? // 'mm', 'kg', 'm2' — shown beside the input so a formula's
+  // implicit units are visible to whoever writes it
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations    OptionGroupTranslation[]
+  values          OptionValue[]
+  templateOptions ConfigTemplateOption[]
+
+  @@map("option_groups")
+}
+
+model OptionGroupTranslation {
+  id         String  @id @db.Uuid
+  groupId    String  @map("group_id") @db.Uuid
+  localeCode String  @map("locale_code") @db.VarChar(8)
+  name       String
+  helpText   String? @map("help_text")
+
+  group  OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  locale Locale      @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([groupId, localeCode])
+  @@index([localeCode])
+  @@map("option_group_translations")
+}
+
+model OptionValue {
+  id      String @id @db.Uuid
+  groupId String @map("group_id") @db.Uuid
+  code    String
+
+  // The value IS this number (thickness 45). Formulas read it as the group's
+  // variable. NULL for values that carry no intrinsic magnitude (a colour).
+  numericValue Decimal? @map("numeric_value") @db.Decimal(12, 4)
+
+  // Everything else the value carries: {density: 700, max_width_mm: 1200}.
+  // JSONB rather than a column per trait because traits differ per group and
+  // are read only by formulas/conditions, never queried. Precedent: settings,
+  // products.legacy_meta.
+  attributes Json?
+
+  // Reuse, don't duplicate. `colors` already holds 11 rows with hex + 5
+  // translations each; a colour option value points at one instead of forking
+  // a second vocabulary that drifts.
+  colorId String? @map("color_id") @db.Uuid
+
+  // Accessories are real products with their own SKU, cost, weight AND HS code.
+  // Modelled as bare option values they would silently vanish from customs and
+  // duplicate their price into pricing_rules. When set and no pricing rule
+  // matches, cost falls back to products.price and the HS code resolves through
+  // the product. Per-value quantity lives in the selection JSON.
+  productId String? @map("product_id") @db.Uuid
+
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  group   OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  color   Color?      @relation(fields: [colorId], references: [id], onDelete: SetNull)
+  product Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  translations     OptionValueTranslation[]
+  templateValues   ConfigTemplateOptionValue[]
+  defaultForOption ConfigTemplateOption[]
+
+  @@unique([groupId, code])
+  @@index([colorId])
+  @@index([productId])
+  @@map("option_values")
+}
+
+model OptionValueTranslation {
+  id         String @id @db.Uuid
+  valueId    String @map("value_id") @db.Uuid
+  localeCode String @map("locale_code") @db.VarChar(8)
+  name       String
+
+  value  OptionValue @relation(fields: [valueId], references: [id], onDelete: Cascade)
+  locale Locale      @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([valueId, localeCode])
+  @@index([localeCode])
+  @@map("option_value_translations")
+}
+
+// ---------------------------------------------------------------------------
+// Templates — a "door" configuration authored once, referenced by many products
+// ---------------------------------------------------------------------------
+
+model ConfigTemplate {
+  id   String @id @db.Uuid
+  code String @unique // 'door'
+  // Plain column, NOT a translation table: a template name is internal
+  // scaffolding ('door_v2'), never rendered to a customer. §3's pattern is for
+  // public entities. Option group/value names DO get translations because they
+  // surface in a quote's selection label.
+  name String
+
+  // Every pricing rule on this template must use this currency. Mixed-currency
+  // rules would make the engine depend on quote context (an FX table) to
+  // resolve a subtotal; instead FX conversion happens exactly once, at
+  // quote-item level, and the engine stays a pure function.
+  currency String @default("AED") @db.Char(3)
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  options           ConfigTemplateOption[]
+  constraints       ConfigTemplateConstraint[]
+  derivedQuantities ConfigDerivedQuantity[]
+  pricingRules      PricingRule[]
+  products          Product[]
+  quoteItems        QuoteItem[]
+
+  @@map("config_templates")
+}
+
+model ConfigTemplateOption {
+  id         String @id @db.Uuid
+  templateId String @map("template_id") @db.Uuid
+  groupId    String @map("group_id") @db.Uuid
+
+  // sort_order is load-bearing, not cosmetic. A condition or formula may only
+  // reference groups with a LOWER sort_order (enforced in the save action), so
+  // the dependency "tree" is a DAG by construction and a circular
+  // material↔colour dependency is unrepresentable rather than a runtime
+  // oscillation nobody can debug.
+  sortOrder Int @map("sort_order")
+
+  // "Required WHEN VISIBLE" — a hidden group is never required.
+  isRequired Boolean @default(false) @map("is_required")
+
+  defaultValueId String? @map("default_value_id") @db.Uuid
+
+  // Hides the whole group, not just its values. Without this, "glazing options
+  // only appear on a glazed door" leaves an empty REQUIRED select that can
+  // never be satisfied.
+  condition Json?
+
+  // Conditional numeric bounds: [{condition, min, max, step}], first match in
+  // array order wins, a null condition acts as the default. A `number` group
+  // has no option_values rows, so a per-value condition has nowhere to hang —
+  // this is the only home for "max width is 1200 when thickness is 45".
+  ranges Json?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  template     ConfigTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  group        OptionGroup    @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  defaultValue OptionValue?   @relation(fields: [defaultValueId], references: [id], onDelete: SetNull)
+
+  values ConfigTemplateOptionValue[]
+
+  @@unique([templateId, groupId])
+  @@index([templateId, sortOrder])
+  @@index([groupId])
+  @@index([defaultValueId])
+  @@map("config_template_options")
+}
+
+model ConfigTemplateOptionValue {
+  templateOptionId String @map("template_option_id") @db.Uuid
+  valueId          String @map("value_id") @db.Uuid
+  sortOrder        Int    @default(0) @map("sort_order")
+
+  // NULL = always available. Otherwise the value is offered only when the
+  // condition matches the current selection. THIS IS THE TREE.
+  condition Json?
+
+  templateOption ConfigTemplateOption @relation(fields: [templateOptionId], references: [id], onDelete: Cascade)
+  value          OptionValue          @relation(fields: [valueId], references: [id], onDelete: Cascade)
+
+  @@id([templateOptionId, valueId])
+  @@index([valueId])
+  @@map("config_template_option_values")
+}
+
+// Evaluated against the COMPLETE selection, so it catches what a per-value
+// condition structurally cannot: a 3-way invalid combination (thickness 45 +
+// width 1200 + MDF, each individually fine) has no single value to hang off,
+// and picking one arbitrarily makes the UI behave differently depending on the
+// order the user clicks in.
+model ConfigTemplateConstraint {
+  id         String   @id @db.Uuid
+  templateId String   @map("template_id") @db.Uuid
+  code       String
+  kind       String // 'forbid' | 'require' — plain string, see OptionGroup.inputKind
+  condition  Json
+  message    String // shown to the person configuring; blocks "Add to quote"
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  template ConfigTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, code])
+  @@index([templateId])
+  @@map("config_template_constraints")
+}
+
+// weight_kg = thickness * height * width * density / 1e9, etc. Evaluated in
+// sort_order by the parser in src/lib/configurator/formula.ts — a formula may
+// only reference groups and EARLIER derived quantities (same DAG rule as
+// conditions), so forward references are rejected at save time.
+model ConfigDerivedQuantity {
+  id         String   @id @db.Uuid
+  templateId String   @map("template_id") @db.Uuid
+  code       String // 'area_m2', 'weight_kg'
+  formula    String
+  unit       String?
+  sortOrder  Int      @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  template ConfigTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, code])
+  @@index([templateId, sortOrder])
+  @@map("config_derived_quantities")
+}
+
+// ---------------------------------------------------------------------------
+// Pricing rules
+// ---------------------------------------------------------------------------
+
+model PricingRule {
+  id String @id @db.Uuid
+
+  // EXACTLY ONE of these is set — enforced by a hand-added
+  // CHECK (num_nonnulls(template_id, product_id) = 1) in the migration, which
+  // Prisma cannot express. Without it a rule with both set silently applies
+  // twice.
+  templateId String? @map("template_id") @db.Uuid
+  productId  String? @map("product_id") @db.Uuid
+
+  code      String
+  condition Json? // NULL = always fires
+
+  // Rules evaluate by (stage, priority, code) — a TOTAL order, because money
+  // must never depend on what Postgres happens to return first.
+  //
+  // A `percent` rule applies to the subtotal at the END OF THE PREVIOUS STAGE,
+  // not to a running total within its own stage. That makes `flat` and
+  // `per_quantity` commutative inside a stage (so priority ties stop mattering)
+  // and it separates "10% hardware surcharge" from "15% margin" from "5% volume
+  // discount", which percent-of-running-total silently conflates.
+  //
+  // 'base' | 'adder' | 'multiplier' | 'margin' | 'discount'
+  stage    String
+  priority Int    @default(100)
+
+  // 'flat' | 'percent' | 'per_quantity'
+  basis String
+
+  // For 'per_quantity': names a variable in scope — an option group code, a
+  // derived quantity code, or the reserved '__qty' (the line quantity), which
+  // is what makes tier pricing ("360/unit at 50+") expressible at all.
+  quantityCode String? @map("quantity_code")
+
+  // 'unit' | 'line' | 'quote'. A one-time AED 800 setup fee on 12 doors is
+  // AED 800, not AED 9,600. Without this column that becomes a hardcoded
+  // `if (code === 'setup_fee')` inside a month.
+  applyPer String @default("unit") @map("apply_per")
+
+  // Money keeps §1's NUMERIC(12,2). `rate` is NOT money — it is a percentage or
+  // a per-unit multiplier (per m², per kg) where 2dp loses real precision, so
+  // it takes (12,4). Documented as an explicit exception in docs/DATABASE.md §1.
+  amount Decimal? @db.Decimal(12, 2)
+  rate   Decimal? @db.Decimal(12, 4)
+
+  // NULL for `percent` rules, where a currency is meaningless.
+  currency String? @db.Char(3)
+
+  note      String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  template ConfigTemplate? @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  product  Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, stage, priority])
+  @@index([productId, stage, priority])
+  @@map("pricing_rules")
+}

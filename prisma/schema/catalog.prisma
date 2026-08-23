@@ -107,6 +107,7 @@ model Color {
 
   translations ColorTranslation[]
   products     Product[]
+  optionValues OptionValue[] // configurator colour options reuse this vocabulary
 
   @@map("colors")
 }
@@ -324,6 +325,13 @@ model Product {
   supplierUrl      String? @map("supplier_url")
   legacyMeta       Json?   @map("legacy_meta") // Shopify leftovers: tags[], description_paragraphs, filter_*
 
+  // Configurator + landed cost (net-new). `price` above stays the flat base
+  // cost for non-configurable products; a product with a template is priced by
+  // src/lib/configurator/price.ts instead. SetNull, never Cascade — deleting a
+  // template must not delete the products that used it.
+  templateId String? @map("template_id") @db.Uuid
+  hsCodeId   String? @map("hs_code_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -334,7 +342,9 @@ model Product {
   look       Look?        @relation(fields: [lookId], references: [id], onDelete: SetNull)
   color      Color?       @relation(fields: [colorId], references: [id], onDelete: SetNull)
   finish     Finish?      @relation(fields: [finishId], references: [id], onDelete: SetNull)
-  collection Collection?  @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  collection Collection?     @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  template   ConfigTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  hsCode     HsCode?         @relation(fields: [hsCodeId], references: [id], onDelete: Restrict)
 
   translations ProductTranslation[]
   applications ProductApplication[]
@@ -342,7 +352,12 @@ model Product {
   images       ProductImage[]
   leads        Lead[]
   favorites    CustomerFavorite[]
+  optionValues OptionValue[] // this product used as a configurator accessory
+  pricingRules PricingRule[] // product-scoped overrides of its template's rules
+  quoteItems   QuoteItem[]
 
+  @@index([templateId])
+  @@index([hsCodeId])
   @@index([sourceId])
   @@index([brandId])
   @@index([typeId])

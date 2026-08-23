@@ -23,6 +23,8 @@ model User {
   leadNotes           LeadNote[]
   auditEntries        AuditLog[]
   settingsUpdated     Setting[]
+  quotesCreated       Quote[]                  @relation("QuoteCreatedBy")
+  quotesAssigned      Quote[]                  @relation("QuoteAssignedTo")
 
   @@map("users")
 }

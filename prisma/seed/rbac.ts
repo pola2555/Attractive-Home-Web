@@ -2,7 +2,7 @@ import argon2 from 'argon2';
 import { uuidv7 } from 'uuidv7';
 import type { PrismaClient } from '@prisma/client';
 
-// docs/DATABASE.md §4 — the nine seed permissions.
+// docs/DATABASE.md §4 — the seed permissions.
 const PERMISSIONS = [
   { slug: 'catalog.read', module: 'catalog', description: 'View catalog data in the dashboard' },
   {
@@ -29,10 +29,27 @@ const PERMISSIONS = [
     description: 'Manage users, roles and permission overrides',
   },
   { slug: 'audit.read', module: 'audit', description: 'View the audit log' },
+  // Quoting + pricing. Deliberately NOT folded into catalog.write: the seeded
+  // data-entry role holds catalog.write, and cost basis, supplier prices and
+  // margins are exactly what that role must not see. Customers never see
+  // prices at all, so the internal boundary has to be real.
+  { slug: 'quotes.read', module: 'quotes', description: 'View quotes and their landed cost' },
+  {
+    slug: 'quotes.write',
+    module: 'quotes',
+    description: 'Create and edit quotes, assemble items and cost shipments',
+  },
+  {
+    slug: 'pricing.write',
+    module: 'pricing',
+    description:
+      'Edit product configurators, pricing rules and freight/customs rate cards (reveals cost basis and margins)',
+  },
 ] as const;
 
 // docs/DATABASE.md §4 — admin = all; data-entry = catalog.read/write,
-// portfolio.write, content.write.
+// portfolio.write, content.write. `sales` quotes without seeing the
+// configurator's rules or the rate cards (pricing.write is admin-only).
 const ROLES: {
   slug: string;
   name: string;
@@ -53,6 +70,13 @@ const ROLES: {
     description: 'Catalog, portfolio and content editing',
     isSystem: true,
     permissions: ['catalog.read', 'catalog.write', 'portfolio.write', 'content.write'],
+  },
+  {
+    slug: 'sales',
+    name: 'Sales',
+    description: 'Leads and quoting — can price a request, cannot edit pricing rules',
+    isSystem: true,
+    permissions: ['catalog.read', 'leads.read', 'leads.write', 'quotes.read', 'quotes.write'],
   },
 ];
 
