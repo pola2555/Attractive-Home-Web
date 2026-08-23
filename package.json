@@ -13,6 +13,7 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "import:data": "tsx scripts/import/index.ts",
     "verify:db": "tsx scripts/verify/db-checks.ts"
   },
