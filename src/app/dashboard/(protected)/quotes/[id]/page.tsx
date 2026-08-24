@@ -44,9 +44,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   ]);
 
   const templates = (
-    await Promise.all(
-      templateRows.filter((row) => row.isActive).map((row) => getTemplate(row.id)),
-    )
+    await Promise.all(templateRows.filter((row) => row.isActive).map((row) => getTemplate(row.id)))
   ).filter((t): t is TemplateDef => t !== null);
 
   // "Pricing changed since this was priced" — a hash comparison, deliberately
@@ -85,7 +83,10 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
         {quote.lead && (
           <p className="text-muted text-sm mt-1">
             From lead{' '}
-            <Link href={`/dashboard/leads/${quote.lead.id}`} className="text-accent hover:underline">
+            <Link
+              href={`/dashboard/leads/${quote.lead.id}`}
+              className="text-accent hover:underline"
+            >
               {quote.lead.name}
             </Link>{' '}
             · <span dir="ltr">{quote.lead.phone}</span>
@@ -127,7 +128,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
         canWrite={canWrite}
       />
 
-      <section>
+      <section data-testid="quote-items">
         <h2 className="text-lg font-semibold text-heading mb-3">Items</h2>
         <QuoteItems quote={quote} canWrite={canWrite && editable} />
       </section>

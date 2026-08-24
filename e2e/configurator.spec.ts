@@ -59,6 +59,8 @@ test('a gated value is pending before its dependency is chosen', async ({ page }
   await signInAsAdmin(page);
   await page.goto(quoteUrl);
 
+  await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
+
   // Walnut stain depends on the material. Before a material is picked it must
   // be PENDING — showing it as unavailable would be a lie, and hiding it would
   // make the list look broken.
@@ -80,9 +82,11 @@ test('a hidden group appears only when its condition is met', async ({ page }) =
 
   // Glazing is hidden entirely on a solid door — hiding only its values would
   // leave an empty required select nobody can satisfy.
+  await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await expect(page.locator('#cfg-glazing')).toHaveCount(0);
 
+  await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'glazed');
   await expect(page.locator('#cfg-glazing')).toBeVisible();
   await shot(page, '06-glazing-appears');
@@ -92,6 +96,7 @@ test('the width limit narrows with thickness', async ({ page }) => {
   await signInAsAdmin(page);
   await page.goto(quoteUrl);
 
+  await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'solid_oak');
 
@@ -111,6 +116,7 @@ test('a three-way forbidden combination blocks the line', async ({ page }) => {
 
   // MDF, 1300 mm and 45 mm are each individually fine. Only the combination is
   // invalid, which no per-value condition can express.
+  await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'mdf');
   await page.fill('#cfg-thickness', '45');
@@ -127,6 +133,7 @@ test('derived quantities compute live and the price previews', async ({ page }) 
   await signInAsAdmin(page);
   await page.goto(quoteUrl);
 
+  await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'solid_oak');
   await page.fill('#cfg-thickness', '45');
@@ -149,6 +156,7 @@ test('adding the item stores the server-computed price', async ({ page }) => {
   await signInAsAdmin(page);
   await page.goto(quoteUrl);
 
+  await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'solid_oak');
   await page.fill('#cfg-thickness', '45');
@@ -178,6 +186,7 @@ test('the volume tier fires at 50 and the setup fee stays per line', async ({ pa
   // figures, so an unscoped match would not prove the preview recalculated.
   const configurator = page.locator('section', { hasText: 'Configure a product' });
 
+  await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'solid_oak');
   await page.fill('#cfg-thickness', '45');

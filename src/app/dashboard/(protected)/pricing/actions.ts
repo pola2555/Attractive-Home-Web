@@ -7,7 +7,11 @@ import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/permissions';
 import { writeAudit } from '@/lib/audit';
 import { referencedGroups } from '@/lib/configurator/condition';
-import { evaluateFormula, referencedVariables, ALLOWED_FUNCTIONS } from '@/lib/configurator/formula';
+import {
+  evaluateFormula,
+  referencedVariables,
+  ALLOWED_FUNCTIONS,
+} from '@/lib/configurator/formula';
 import { getTemplate } from '@/lib/configuratorAdmin';
 import {
   APPLY_PER,
@@ -139,7 +143,10 @@ export async function saveOptionValue(_prev: FormState, fd: FormData): Promise<F
   // Attributes reach formulas as `<group>_<key>`, e.g. door_material_density.
   const attributesRaw = parseJson(str(fd, 'attributes'));
   if (attributesRaw === undefined) return { error: 'Attributes must be valid JSON.' };
-  if (attributesRaw !== null && (typeof attributesRaw !== 'object' || Array.isArray(attributesRaw))) {
+  if (
+    attributesRaw !== null &&
+    (typeof attributesRaw !== 'object' || Array.isArray(attributesRaw))
+  ) {
     return { error: 'Attributes must be a JSON object, e.g. {"density": 700}.' };
   }
 
@@ -254,9 +261,7 @@ export async function saveTemplateOption(_prev: FormState, fd: FormData): Promis
     where: { templateId },
     include: { group: { select: { code: true } } },
   });
-  const earlier = new Set(
-    existing.filter((o) => o.sortOrder < sortOrder).map((o) => o.group.code),
-  );
+  const earlier = new Set(existing.filter((o) => o.sortOrder < sortOrder).map((o) => o.group.code));
 
   const referenced = new Set<string>();
   referencedGroups(condition as Condition | null, referenced);
@@ -281,11 +286,22 @@ export async function saveTemplateOption(_prev: FormState, fd: FormData): Promis
     ranges: (ranges ?? undefined) as object | undefined,
   };
 
-  await prisma.configTemplateOption.upsert({
-    where: { templateId_groupId: { templateId, groupId } },
-    update: data,
-    create: { id: uuidv7(), templateId, groupId, ...data },
+  // Not an upsert: a question can now be bound once per variant, so the old
+  // UNIQUE(template_id, group_id) has become two PARTIAL indexes that Prisma
+  // cannot address as a compound key. This screen only ever edits the
+  // variant-less binding, so it is the one matched here.
+  const existingOption = await prisma.configTemplateOption.findFirst({
+    where: { templateId, groupId, variantId: null },
+    select: { id: true },
   });
+
+  if (existingOption) {
+    await prisma.configTemplateOption.update({ where: { id: existingOption.id }, data });
+  } else {
+    await prisma.configTemplateOption.create({
+      data: { id: uuidv7(), templateId, groupId, ...data },
+    });
+  }
 
   await writeAudit({
     userId: user.id,
@@ -432,7 +448,9 @@ export async function savePricingRule(_prev: FormState, fd: FormData): Promise<F
     return { error: 'A per-quantity rule must name the quantity it multiplies.' };
   }
   if (basis === 'percent' && applyPer !== 'unit') {
-    return { error: 'A percentage rule only applies per unit — it has no other well-defined base.' };
+    return {
+      error: 'A percentage rule only applies per unit — it has no other well-defined base.',
+    };
   }
 
   const data = {
@@ -553,9 +571,7 @@ export async function saveTemplateOptionValues(_prev: FormState, fd: FormData): 
   if (!option) return { error: 'Template option not found.' };
 
   const earlier = new Set(
-    option.template.options
-      .filter((o) => o.sortOrder < option.sortOrder)
-      .map((o) => o.group.code),
+    option.template.options.filter((o) => o.sortOrder < option.sortOrder).map((o) => o.group.code),
   );
 
   const schema = z.array(
@@ -725,4 +741,440 @@ export async function savePortStorageRate(_prev: FormState, fd: FormData): Promi
 
   revalidatePath('/dashboard/pricing/rates');
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Variants, price grids, upgrades and bands — the editor's half of the module
+//
+// Every one of these is written so the EDITOR never types JSON. A condition
+// arrives as a group code plus a list of value codes and is assembled here; a
+// band arrives as three numbers. That is the whole point of these actions
+// existing rather than reusing the generic rule form.
+// ---------------------------------------------------------------------------
+
+export async function saveVariant(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePermission('pricing.write');
+  const templateId = str(fd, 'templateId');
+  const code = str(fd, 'code');
+  const name = str(fd, 'name');
+
+  if (!/^[a-z0-9_]+$/.test(code)) {
+    return { error: 'Use lowercase letters, numbers and underscores for the code.' };
+  }
+  if (!name) return { error: 'Give the variant a name.' };
+
+  const existing = await prisma.configVariant.findFirst({
+    where: { templateId, code },
+    select: { id: true },
+  });
+
+  const data = {
+    name,
+    includedSpec: nullableStr(fd, 'includedSpec'),
+    sortOrder: Number(str(fd, 'sortOrder') || '0') || 0,
+  };
+
+  const variant = existing
+    ? await prisma.configVariant.update({ where: { id: existing.id }, data })
+    : await prisma.configVariant.create({
+        data: { id: uuidv7(), templateId, code, ...data },
+      });
+
+  // Every variant gets a grid immediately, even an empty one: the editor's
+  // next screen is "fill the grid", and making them create it by hand is a
+  // step that exists only because the schema said so.
+  await prisma.configPriceGrid.upsert({
+    where: { variantId: variant.id },
+    update: {},
+    create: { id: uuidv7(), variantId: variant.id, currency: str(fd, 'currency') || 'USD' },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_variant',
+    entityId: variant.id,
+    action: existing ? 'update' : 'create',
+    diff: { name: { from: null, to: name } },
+  });
+
+  revalidatePath(`/dashboard/pricing/templates/${templateId}`);
+  return { ok: true };
+}
+
+export async function removeVariant(fd: FormData): Promise<void> {
+  const user = await requirePermission('pricing.write');
+  const id = str(fd, 'id');
+  const variant = await prisma.configVariant.findUnique({ where: { id } });
+  if (!variant) return;
+
+  // Cascades to the grid, its cells, this branch's questions, its upgrades and
+  // its bands — which is why the UI asks first.
+  await prisma.configVariant.delete({ where: { id } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_variant',
+    entityId: id,
+    action: 'delete',
+    diff: { code: { from: variant.code, to: null } },
+  });
+  revalidatePath(`/dashboard/pricing/templates/${variant.templateId}`);
+}
+
+/** Bind a question to one branch, and say which of its values that branch sells. */
+export async function saveVariantOption(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePermission('pricing.write');
+  const templateId = str(fd, 'templateId');
+  const variantId = str(fd, 'variantId');
+  const groupId = str(fd, 'groupId');
+  const sortOrder = Number(str(fd, 'sortOrder') || '0') || 0;
+
+  const group = await prisma.optionGroup.findUnique({
+    where: { id: groupId },
+    include: { values: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!group) return { error: 'That option group no longer exists.' };
+
+  const existing = await prisma.configTemplateOption.findFirst({
+    where: { templateId, groupId, variantId },
+    select: { id: true },
+  });
+
+  const option = existing
+    ? await prisma.configTemplateOption.update({
+        where: { id: existing.id },
+        data: { sortOrder, configText: nullableStr(fd, 'configText') },
+      })
+    : await prisma.configTemplateOption.create({
+        data: {
+          id: uuidv7(),
+          templateId,
+          variantId,
+          groupId,
+          sortOrder,
+          isRequired: true,
+          configText: nullableStr(fd, 'configText'),
+        },
+      });
+
+  // Which values this branch offers. An empty submission means "all of them",
+  // because a question with no answers is never what anyone meant.
+  const offered = fd.getAll('valueCodes').filter((v): v is string => typeof v === 'string');
+  const codes = offered.length ? offered : group.values.map((v) => v.code);
+
+  await prisma.configTemplateOptionValue.deleteMany({ where: { templateOptionId: option.id } });
+  for (const [index, code] of codes.entries()) {
+    const value = group.values.find((v) => v.code === code);
+    if (!value) continue;
+    await prisma.configTemplateOptionValue.create({
+      data: { templateOptionId: option.id, valueId: value.id, sortOrder: index },
+    });
+  }
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_template_option',
+    entityId: option.id,
+    action: existing ? 'update' : 'create',
+    diff: { values: { from: null, to: codes.length } },
+  });
+
+  revalidatePath(`/dashboard/pricing/templates/${templateId}`);
+  return { ok: true };
+}
+
+/** Which questions form the grid's axes, in order. */
+export async function saveGridAxes(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePermission('pricing.write');
+  const variantId = str(fd, 'variantId');
+  const templateId = str(fd, 'templateId');
+
+  const grid = await prisma.configPriceGrid.findUnique({ where: { variantId } });
+  if (!grid) return { error: 'That variant has no price grid yet.' };
+
+  const optionIds = fd.getAll('optionIds').filter((v): v is string => typeof v === 'string');
+  if (optionIds.length === 0) return { error: 'Choose at least one question for the grid.' };
+
+  const options = await prisma.configTemplateOption.findMany({
+    where: { id: { in: optionIds } },
+    include: { group: true },
+  });
+
+  // A number cannot be a grid axis: it has no finite set of values to make
+  // columns from. Size is priced by bands instead, which is what the supplier
+  // does anyway.
+  const numeric = options.filter((o) => o.group.inputKind !== 'select');
+  if (numeric.length) {
+    return {
+      error: `Only single-choice questions can be grid axes. "${numeric[0].group.code}" is a ${numeric[0].group.inputKind} — price it with a size band instead.`,
+    };
+  }
+
+  // Changing the axes re-keys every cell, so the old ones cannot be kept: a
+  // key built from two axes means nothing once there are three.
+  await prisma.configPriceCell.deleteMany({ where: { gridId: grid.id } });
+  await prisma.configPriceGridAxis.deleteMany({ where: { gridId: grid.id } });
+
+  for (const [position, id] of optionIds.entries()) {
+    await prisma.configPriceGridAxis.create({
+      data: { id: uuidv7(), gridId: grid.id, templateOptionId: id, position },
+    });
+  }
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_price_grid',
+    entityId: grid.id,
+    action: 'update',
+    diff: { axes: { from: null, to: optionIds.length } },
+  });
+
+  revalidatePath(`/dashboard/pricing/templates/${templateId}/grid/${variantId}`);
+  return { ok: true };
+}
+
+/**
+ * Save the whole grid in one post.
+ *
+ * Cell by cell would be a request per keystroke on a grid with 18 of them, and
+ * would leave the grid half-saved if the tab closed. The form carries every
+ * cell, and a blank box means NOT SOLD — the dash in the supplier's sheet —
+ * which is a fact worth storing rather than an absence.
+ */
+export async function saveGridCells(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePermission('pricing.write');
+  const variantId = str(fd, 'variantId');
+  const templateId = str(fd, 'templateId');
+
+  const grid = await prisma.configPriceGrid.findUnique({
+    where: { variantId },
+    include: {
+      axes: {
+        orderBy: { position: 'asc' },
+        include: { templateOption: { include: { group: true } } },
+      },
+    },
+  });
+  if (!grid) return { error: 'That variant has no price grid yet.' };
+
+  const raw = parseJson(str(fd, 'cellsJson'));
+  if (raw === undefined) return { error: 'The grid could not be read. Reload and try again.' };
+
+  const parsed = z.record(z.string(), z.string()).safeParse(raw ?? {});
+  if (!parsed.success) return { error: 'The grid could not be read. Reload and try again.' };
+
+  const axisCodes = grid.axes.map((a) => a.templateOption.group.code);
+
+  for (const [key, value] of Object.entries(parsed.data)) {
+    const parts = key.split('|');
+    if (parts.length !== axisCodes.length) continue;
+
+    const trimmed = value.trim();
+    let amount: number | null = null;
+    if (trimmed !== '') {
+      const n = Number(trimmed);
+      if (!Number.isFinite(n) || n < 0) {
+        return { error: `"${trimmed}" is not a price. Leave a cell blank to mark it not sold.` };
+      }
+      amount = n;
+    }
+
+    const coords = Object.fromEntries(axisCodes.map((code, i) => [code, parts[i]]));
+    await prisma.configPriceCell.upsert({
+      where: { gridId_key: { gridId: grid.id, key } },
+      update: { amount, coords },
+      create: { id: uuidv7(), gridId: grid.id, key, coords, amount },
+    });
+  }
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_price_grid',
+    entityId: grid.id,
+    action: 'update',
+    diff: { cells: { from: null, to: Object.keys(parsed.data).length } },
+  });
+
+  revalidatePath(`/dashboard/pricing/templates/${templateId}/grid/${variantId}`);
+  return { ok: true };
+}
+
+const UPGRADE_UNIT_VALUES = ['flat', 'per_unit', 'per_set', 'per_sqm', 'per_piece'] as const;
+
+export async function saveUpgrade(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePermission('pricing.write');
+  const templateId = str(fd, 'templateId');
+  const code = str(fd, 'code');
+  const label = str(fd, 'label');
+
+  if (!/^[a-z0-9_]+$/.test(code)) {
+    return { error: 'Use lowercase letters, numbers and underscores for the code.' };
+  }
+  if (!label) return { error: 'Give the upgrade a name.' };
+
+  const amount = Number(str(fd, 'amount'));
+  if (!Number.isFinite(amount)) return { error: 'Enter an amount.' };
+
+  const unit = str(fd, 'unit');
+  if (!UPGRADE_UNIT_VALUES.includes(unit as (typeof UPGRADE_UNIT_VALUES)[number])) {
+    return { error: 'Choose how the amount is charged.' };
+  }
+  if (unit === 'per_sqm' && !str(fd, 'quantityCode')) {
+    return { error: 'A per-m² upgrade needs the calculated quantity it multiplies.' };
+  }
+
+  // The condition, assembled from dropdowns rather than typed. This is the
+  // whole reason "only available on 45 and 55 mm" does not require JSON.
+  const whenGroup = nullableStr(fd, 'whenGroup');
+  const whenValues = fd.getAll('whenValues').filter((v): v is string => typeof v === 'string');
+  let condition: Condition | null = null;
+  if (whenGroup && whenValues.length) condition = { group: whenGroup, in: whenValues };
+
+  const existing = await prisma.configUpgrade.findFirst({
+    where: { templateId, code },
+    select: { id: true },
+  });
+
+  const data = {
+    variantId: nullableStr(fd, 'variantId'),
+    section: nullableStr(fd, 'section'),
+    label,
+    detail: nullableStr(fd, 'detail'),
+    kind: str(fd, 'kind') === 'accessory' ? 'accessory' : 'upgrade',
+    amount,
+    unit,
+    quantityCode: nullableStr(fd, 'quantityCode'),
+    defaultQty: Number(str(fd, 'defaultQty') || '1') || 1,
+    condition: (condition ?? undefined) as object | undefined,
+    unavailableNote: nullableStr(fd, 'unavailableNote'),
+    sortOrder: Number(str(fd, 'sortOrder') || '0') || 0,
+  };
+
+  const upgrade = existing
+    ? await prisma.configUpgrade.update({ where: { id: existing.id }, data })
+    : await prisma.configUpgrade.create({ data: { id: uuidv7(), templateId, code, ...data } });
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_upgrade',
+    entityId: upgrade.id,
+    action: existing ? 'update' : 'create',
+    diff: { amount: { from: null, to: amount } },
+  });
+
+  revalidatePath(`/dashboard/pricing/templates/${templateId}`);
+  return { ok: true };
+}
+
+export async function removeUpgrade(fd: FormData): Promise<void> {
+  const user = await requirePermission('pricing.write');
+  const id = str(fd, 'id');
+  const upgrade = await prisma.configUpgrade.findUnique({ where: { id } });
+  if (!upgrade) return;
+  await prisma.configUpgrade.delete({ where: { id } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_upgrade',
+    entityId: id,
+    action: 'delete',
+    diff: { code: { from: upgrade.code, to: null } },
+  });
+  revalidatePath(`/dashboard/pricing/templates/${upgrade.templateId}`);
+}
+
+export async function saveBand(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePermission('pricing.write');
+  const templateId = str(fd, 'templateId');
+  const code = str(fd, 'code');
+  const label = str(fd, 'label');
+  const templateOptionId = str(fd, 'templateOptionId');
+
+  if (!/^[a-z0-9_]+$/.test(code)) {
+    return { error: 'Use lowercase letters, numbers and underscores for the code.' };
+  }
+  if (!label) return { error: 'Give the band a name.' };
+
+  const min = nullableNum(str(fd, 'minValue'));
+  const max = nullableNum(str(fd, 'maxValue'));
+  if (min === null && max === null) {
+    return { error: 'A band needs at least one end, otherwise it matches every size.' };
+  }
+  if (min !== null && max !== null && min >= max) {
+    return { error: 'The lower bound has to be below the upper one.' };
+  }
+
+  const amount = Number(str(fd, 'amount'));
+  if (!Number.isFinite(amount)) return { error: 'Enter an amount.' };
+
+  const option = await prisma.configTemplateOption.findUnique({
+    where: { id: templateOptionId },
+    include: { group: true },
+  });
+  if (!option) return { error: 'Choose the measurement this band applies to.' };
+  if (option.group.inputKind !== 'number') {
+    return { error: `"${option.group.code}" is not a measurement, so it has no bands.` };
+  }
+
+  // Overlap is the defect the supplier's own list has: width 950-1050 and
+  // 1050-1220 both claim 1050. Bands are half-open so only one can ever win,
+  // but warning at save time is better than a silently ignored row.
+  const siblings = await prisma.configBand.findMany({
+    where: { templateId, templateOptionId, NOT: { code } },
+  });
+  for (const other of siblings) {
+    const otherMin = other.minValue ? other.minValue.toNumber() : -Infinity;
+    const otherMax = other.maxValue ? other.maxValue.toNumber() : Infinity;
+    const thisMin = min ?? -Infinity;
+    const thisMax = max ?? Infinity;
+    if (thisMin < otherMax && otherMin < thisMax) {
+      return {
+        error: `This overlaps "${other.label}". Two bands on one measurement means only the first ever applies — narrow one of them.`,
+      };
+    }
+  }
+
+  const existing = await prisma.configBand.findFirst({
+    where: { templateId, code },
+    select: { id: true },
+  });
+
+  const data = {
+    variantId: nullableStr(fd, 'variantId'),
+    templateOptionId,
+    label,
+    minValue: min,
+    maxValue: max,
+    amount,
+    sortOrder: Number(str(fd, 'sortOrder') || '0') || 0,
+  };
+
+  const band = existing
+    ? await prisma.configBand.update({ where: { id: existing.id }, data })
+    : await prisma.configBand.create({ data: { id: uuidv7(), templateId, code, ...data } });
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_band',
+    entityId: band.id,
+    action: existing ? 'update' : 'create',
+    diff: { amount: { from: null, to: amount } },
+  });
+
+  revalidatePath(`/dashboard/pricing/templates/${templateId}`);
+  return { ok: true };
+}
+
+export async function removeBand(fd: FormData): Promise<void> {
+  const user = await requirePermission('pricing.write');
+  const id = str(fd, 'id');
+  const band = await prisma.configBand.findUnique({ where: { id } });
+  if (!band) return;
+  await prisma.configBand.delete({ where: { id } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_band',
+    entityId: id,
+    action: 'delete',
+    diff: { code: { from: band.code, to: null } },
+  });
+  revalidatePath(`/dashboard/pricing/templates/${band.templateId}`);
 }

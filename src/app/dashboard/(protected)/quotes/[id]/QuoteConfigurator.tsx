@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useActionState, useMemo, useState } from 'react';
 import { addQuoteItem, type FormState } from '../actions';
 import { cascadeSelection, resolveConfiguration } from '@/lib/configurator/resolve';
-import { priceConfiguration } from '@/lib/configurator/price';
+import { priceProduct, withVariant } from '@/lib/configurator/product';
+import { selectedVariantCode } from '@/lib/configurator/grid';
 import type { Selection, TemplateDef } from '@/lib/configurator/types';
 
 // The live configurator.
@@ -30,6 +31,7 @@ export default function QuoteConfigurator({
 }) {
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? '');
   const [selection, setSelection] = useState<Selection>({});
+  const [picked, setPicked] = useState<Record<string, number>>({});
   const [quantity, setQuantity] = useState(1);
   const [name, setName] = useState('');
   const [state, formAction, pending] = useActionState<FormState, FormData>(addQuoteItem, {});
@@ -40,14 +42,31 @@ export default function QuoteConfigurator({
   );
 
   const resolution = useMemo(
-    () => (template ? resolveConfiguration(template, selection, quantity) : null),
-    [template, selection, quantity],
+    () => (template ? resolveConfiguration(template, selection, quantity, picked) : null),
+    [template, selection, quantity, picked],
   );
 
   const priced = useMemo(
-    () => (template ? priceConfiguration(template, selection, quantity) : null),
-    [template, selection, quantity],
+    () => (template ? priceProduct({ template, selection, picked, quantity }) : null),
+    [template, selection, picked, quantity],
   );
+
+  const variantCode = selectedVariantCode(selection);
+  const variants = template?.variants ?? [];
+  const variant = variants.find((v) => v.code === variantCode) ?? null;
+
+  // Upgrades are grouped under the supplier's own headings so the screen reads
+  // like the price list a salesperson may still have open beside it.
+  const sections = useMemo(() => {
+    const out = new Map<string, NonNullable<typeof resolution>['upgrades']>();
+    for (const upgrade of resolution?.upgrades ?? []) {
+      const key = upgrade.section ?? 'Other';
+      const list = out.get(key) ?? [];
+      list.push(upgrade);
+      out.set(key, list);
+    }
+    return [...out.entries()];
+  }, [resolution]);
 
   // Every change cascades: choosing a material can invalidate a colour chosen
   // before it, and leaving the stale value selected would price something the
@@ -65,6 +84,25 @@ export default function QuoteConfigurator({
   function pickTemplate(id: string) {
     setTemplateId(id);
     setSelection({});
+    setPicked({});
+  }
+
+  // Switching branch discards the whole selection rather than trying to carry
+  // it across: the two branches ask different questions, so a "thickness" kept
+  // from the aluminium frame means nothing on the wood one and would sit in
+  // the selection poisoning the grid key.
+  function pickVariant(code: string) {
+    setSelection(withVariant({}, code || null));
+    setPicked({});
+  }
+
+  function toggleUpgrade(code: string, on: boolean, qty: number) {
+    setPicked((prev) => {
+      const next = { ...prev };
+      if (on) next[code] = qty;
+      else delete next[code];
+      return next;
+    });
   }
 
   if (templates.length === 0) {
@@ -80,13 +118,15 @@ export default function QuoteConfigurator({
   }
 
   const blocking = resolution?.issues ?? [];
-  const canAdd = !!resolution?.isComplete && !!priced && priced.issues.length === 0;
+  const canAdd =
+    !!resolution?.isComplete && !!priced && priced.issues.length === 0 && priced.isPriceable;
 
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="quoteId" value={quoteId} />
       <input type="hidden" name="templateId" value={templateId} />
       <input type="hidden" name="selectionJson" value={JSON.stringify(selection)} />
+      <input type="hidden" name="upgradesJson" value={JSON.stringify(picked)} />
       <input type="hidden" name="name" value={name || (template?.name ?? '')} />
 
       <div className="grid grid-cols-2 gap-3">
@@ -120,6 +160,38 @@ export default function QuoteConfigurator({
           />
         </div>
       </div>
+
+      {variants.length > 0 && (
+        <div>
+          <label className={labelCls} htmlFor="cfg-variant">
+            Base variant<span className="text-accent"> *</span>
+          </label>
+          <select
+            id="cfg-variant"
+            className={inputCls}
+            value={variantCode ?? ''}
+            onChange={(e) => pickVariant(e.target.value)}
+          >
+            <option value="">Choose…</option>
+            {variants.map((v) => (
+              <option key={v.code} value={v.code}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+          {variant?.includedSpec && (
+            // What the base price already covers. Without it a salesperson
+            // cannot tell a customer what they are paying an upgrade to change.
+            <p className="text-muted text-xs mt-1">Includes: {variant.includedSpec}</p>
+          )}
+        </div>
+      )}
+
+      {template?.standardNote && (
+        <p className="text-xs text-muted border border-line rounded-lg px-3 py-2 bg-surface/40">
+          {template.standardNote}
+        </p>
+      )}
 
       {resolution?.options
         .filter((option) => option.isVisible)
@@ -281,16 +353,96 @@ export default function QuoteConfigurator({
         </div>
       </div>
 
+      {sections.length > 0 && (
+        <div className="space-y-3">
+          {sections.map(([section, upgrades]) => (
+            <div key={section} className="border border-line rounded-lg p-3 bg-surface/40">
+              <p className="text-xs uppercase tracking-wider text-muted mb-2">{section}</p>
+              <div className="space-y-1.5">
+                {upgrades.map((upgrade) => {
+                  const on = picked[upgrade.code] !== undefined;
+                  const qty = picked[upgrade.code] ?? upgrade.defaultQty;
+                  const blocked = upgrade.availability !== 'yes';
+                  const countable = upgrade.unit !== 'flat';
+                  return (
+                    <div
+                      key={upgrade.code}
+                      className={`flex items-start gap-2 text-sm ${blocked ? 'opacity-45' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        id={`upg-${upgrade.code}`}
+                        className="mt-1 accent-[var(--color-accent)]"
+                        checked={on}
+                        disabled={blocked}
+                        onChange={(e) => toggleUpgrade(upgrade.code, e.target.checked, qty)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <label htmlFor={`upg-${upgrade.code}`} className="text-ink">
+                          {upgrade.label}
+                        </label>
+                        {countable && on && (
+                          <input
+                            type="number"
+                            aria-label={`${upgrade.label} quantity`}
+                            className="ms-2 w-16 px-1.5 py-0.5 bg-surface text-ink rounded border border-line-strong text-xs"
+                            min={upgrade.minQty}
+                            max={upgrade.maxQty ?? undefined}
+                            value={qty}
+                            onChange={(e) =>
+                              toggleUpgrade(
+                                upgrade.code,
+                                true,
+                                Math.max(upgrade.minQty, Number(e.target.value) || upgrade.minQty),
+                              )
+                            }
+                          />
+                        )}
+                        {upgrade.detail && <p className="text-muted text-xs">{upgrade.detail}</p>}
+                        {/* Greyed out WITH a reason. Hiding it sends someone
+                            hunting for an upgrade the customer just named. */}
+                        {blocked && upgrade.unavailableNote && (
+                          <p className="text-xs text-accent">{upgrade.unavailableNote}</p>
+                        )}
+                      </div>
+                      <span className="text-muted text-xs whitespace-nowrap" dir="ltr">
+                        +{upgrade.amount.toFixed(2)}
+                        {upgrade.unit === 'per_unit' || upgrade.unit === 'per_piece'
+                          ? ' ea'
+                          : upgrade.unit === 'per_set'
+                            ? ' /set'
+                            : upgrade.unit === 'per_sqm'
+                              ? ' /m²'
+                              : ''}
+                        {upgrade.hasTiers && <span className="text-accent"> tiered</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {resolution && Object.keys(resolution.derived).length > 0 && (
         <div className="text-sm text-muted border border-line rounded-lg p-3 bg-surface/40">
-          {Object.entries(resolution.derived).map(([code, value]) => (
-            <span key={code} className="me-4">
-              {code}:{' '}
-              <span className={value === null ? 'text-red-300' : 'text-ink'}>
-                {value === null ? 'needs review' : value.toFixed(3)}
+          {Object.entries(resolution.derived).map(([code, value]) => {
+            // A null with no issue against it simply has not been answered
+            // yet — an optional width, say. Calling that "needs review" sends
+            // someone looking for a fault that is not there.
+            const broken = resolution.issues.some((i) => i.kind === 'formula' && i.code === code);
+            return (
+              <span key={code} className="me-4">
+                {code}:{' '}
+                <span
+                  className={broken ? 'text-red-300' : value === null ? 'text-muted' : 'text-ink'}
+                >
+                  {value === null ? (broken ? 'needs review' : '—') : value.toFixed(3)}
+                </span>
               </span>
-            </span>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -315,10 +467,12 @@ export default function QuoteConfigurator({
           <table className="w-full">
             <tbody>
               {priced.breakdown.map((line) => (
-                <tr key={line.ruleCode} className="text-muted">
+                <tr key={`${line.source ?? 'rule'}-${line.ruleCode}`} className="text-muted">
                   <td className="py-0.5">
-                    {line.ruleCode}
-                    <span className="text-xs"> ({line.stage})</span>
+                    {/* Seeded lines carry a human label; rules only have a
+                        code, which is all a rule has ever been named by. */}
+                    {line.label ?? line.ruleCode}
+                    <span className="text-xs"> ({line.source ?? line.stage})</span>
                     {line.applyPer !== 'unit' && (
                       <span className="text-xs text-accent"> per {line.applyPer}</span>
                     )}

@@ -5,6 +5,9 @@ import { requireUser, effectivePermissions } from '@/lib/permissions';
 import { getTemplate, listOptionGroups } from '@/lib/configuratorAdmin';
 import TemplateForm from '../TemplateForm';
 import TemplateOptionForm from './TemplateOptionForm';
+import VariantForm from './VariantForm';
+import UpgradeForm, { type UpgradeFormOption } from './UpgradeForm';
+import BandForm from './BandForm';
 import DerivedQuantityForm from './DerivedQuantityForm';
 import PricingRuleForm from './PricingRuleForm';
 import ConstraintForm from './ConstraintForm';
@@ -12,7 +15,10 @@ import {
   deleteConstraint,
   deleteDerivedQuantity,
   deletePricingRule,
+  removeBand,
   removeTemplateOption,
+  removeUpgrade,
+  removeVariant,
 } from '../../actions';
 
 // The template editor: the option tree in order, the derived quantities that
@@ -53,6 +59,67 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
     orderBy: [{ stage: 'asc' }, { priority: 'asc' }, { code: 'asc' }],
   });
 
+  const [variantRows, upgradeRows, bandRows] = await Promise.all([
+    prisma.configVariant.findMany({
+      where: { templateId: id },
+      orderBy: { sortOrder: 'asc' },
+      include: { grid: { include: { axes: true, cells: true } } },
+    }),
+    prisma.configUpgrade.findMany({
+      where: { templateId: id },
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+      include: { variant: { select: { name: true } }, tiers: true },
+    }),
+    prisma.configBand.findMany({
+      where: { templateId: id },
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+      include: {
+        variant: { select: { name: true } },
+        templateOption: { include: { group: { select: { code: true } } } },
+      },
+    }),
+  ]);
+
+  // Fed to the upgrade form's condition builder, so "only on 45 and 55 mm" is
+  // authored by picking a question and ticking answers.
+  // Deduplicated by question: a group bound to both branches is still one
+  // question to write a condition against, and offering it twice in the
+  // dropdown would only invite picking the wrong one.
+  const upgradeFormOptions: UpgradeFormOption[] = [
+    ...new Map(
+      template.options
+        .filter((option) => option.values.length > 0)
+        .map((option) => [
+          option.groupCode,
+          {
+            groupCode: option.groupCode,
+            name: option.name,
+            values: option.values.map((v) => ({ code: v.code, name: v.name })),
+          },
+        ]),
+    ).values(),
+  ];
+
+  // Bands hang off measurements, which are the only questions with a magnitude
+  // to fall inside a range.
+  const measurementOptions = [
+    ...new Map(
+      optionRows
+        .filter(
+          (row) =>
+            template.options.find((o) => o.groupCode === row.group.code)?.inputKind === 'number',
+        )
+        .map((row) => [
+          row.group.code,
+          {
+            id: row.id,
+            code: row.group.code,
+            unit: template.options.find((o) => o.groupCode === row.group.code)?.unit ?? null,
+          },
+        ]),
+    ).values(),
+  ];
+
   return (
     <div className="max-w-5xl space-y-8">
       <div>
@@ -72,9 +139,9 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
       <section>
         <h2 className="text-lg font-semibold text-heading mb-1">Options</h2>
         <p className="text-muted text-sm mb-3">
-          Order is load-bearing: a condition or formula may only reference options{' '}
-          <em>above</em> it. That is what keeps the dependency tree acyclic instead of letting
-          material and colour gate each other.
+          Order is load-bearing: a condition or formula may only reference options <em>above</em>{' '}
+          it. That is what keeps the dependency tree acyclic instead of letting material and colour
+          gate each other.
         </p>
         <table className="w-full text-sm border-collapse mb-4">
           <thead>
@@ -91,7 +158,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
           </thead>
           <tbody>
             {template.options.map((option) => (
-              <tr key={option.groupCode} className="border-b border-line/50 align-top">
+              <tr key={option.id} className="border-b border-line/50 align-top">
                 <td className="py-2 pe-4 text-muted">{option.sortOrder}</td>
                 <td className="py-2 pe-4">{option.groupCode}</td>
                 <td className="py-2 pe-4 text-muted">{option.inputKind}</td>
@@ -105,9 +172,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
                 <td className="py-2 pe-4 text-xs">
                   {option.values.length === 0
                     ? '—'
-                    : option.values
-                        .map((v) => (v.condition ? `${v.code}*` : v.code))
-                        .join(', ')}
+                    : option.values.map((v) => (v.condition ? `${v.code}*` : v.code)).join(', ')}
                 </td>
                 <td className="py-2 text-end">
                   <form action={removeTemplateOption}>
@@ -268,6 +333,188 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
         </table>
         <div className="border border-line rounded-lg p-4 bg-surface/40">
           <PricingRuleForm templateId={id} template={template} />
+        </div>
+      </section>
+
+      {/* ---- Variants ---------------------------------------------------- */}
+      <section data-testid="variants">
+        <h2 className="text-lg font-semibold text-heading mb-1">Base variants</h2>
+        <p className="text-muted text-sm mb-3">
+          Add one only when the product genuinely forks — when two builds carry different questions,
+          different prices <em>and</em> different upgrades. A product without variants skips this
+          entirely.
+        </p>
+
+        {variantRows.length > 0 && (
+          <table className="w-full text-sm border-collapse mb-4">
+            <thead>
+              <tr className="text-start text-muted border-b border-line">
+                <th className="text-start py-2 pe-4">#</th>
+                <th className="text-start py-2 pe-4">Code</th>
+                <th className="text-start py-2 pe-4">Name</th>
+                <th className="text-start py-2 pe-4">Includes</th>
+                <th className="text-start py-2 pe-4">Grid</th>
+                <th className="py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {variantRows.map((variant) => {
+                const cells = variant.grid?.cells ?? [];
+                const priced = cells.filter((c) => c.amount !== null).length;
+                return (
+                  <tr key={variant.id} className="border-b border-line/50 align-top">
+                    <td className="py-2 pe-4 text-muted">{variant.sortOrder}</td>
+                    <td className="py-2 pe-4 font-mono text-xs">{variant.code}</td>
+                    <td className="py-2 pe-4">{variant.name}</td>
+                    <td className="py-2 pe-4 text-muted text-xs max-w-[18rem]">
+                      {variant.includedSpec ?? '—'}
+                    </td>
+                    <td className="py-2 pe-4">
+                      <Link
+                        href={`/dashboard/pricing/templates/${id}/grid/${variant.id}`}
+                        className="text-accent hover:underline"
+                      >
+                        {variant.grid?.axes.length
+                          ? `${priced} priced · ${cells.length - priced} not sold`
+                          : 'set up'}
+                      </Link>
+                    </td>
+                    <td className="py-2 text-end">
+                      <form action={removeVariant}>
+                        <input type="hidden" name="id" value={variant.id} />
+                        <button className="text-xs text-red-300 hover:underline">Delete</button>
+                      </form>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+
+        <div className="border border-line rounded-lg p-4 bg-surface/40">
+          <VariantForm templateId={id} />
+        </div>
+      </section>
+
+      {/* ---- Upgrades ---------------------------------------------------- */}
+      <section data-testid="upgrades">
+        <h2 className="text-lg font-semibold text-heading mb-1">Upgrades and accessories</h2>
+        <p className="text-muted text-sm mb-3">
+          Things a salesperson ticks. Each carries an amount, how it is charged, and — through
+          dropdowns rather than JSON — when it is offered at all.
+        </p>
+
+        {upgradeRows.length > 0 && (
+          <table className="w-full text-sm border-collapse mb-4">
+            <thead>
+              <tr className="text-start text-muted border-b border-line">
+                <th className="text-start py-2 pe-4">Section</th>
+                <th className="text-start py-2 pe-4">Name</th>
+                <th className="text-start py-2 pe-4">Variant</th>
+                <th className="text-end py-2 pe-4">Amount</th>
+                <th className="text-start py-2 pe-4">Charged</th>
+                <th className="text-start py-2 pe-4">Offered when</th>
+                <th className="py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {upgradeRows.map((upgrade) => (
+                <tr key={upgrade.id} className="border-b border-line/50 align-top">
+                  <td className="py-2 pe-4 text-muted text-xs">{upgrade.section ?? '—'}</td>
+                  <td className="py-2 pe-4">
+                    {upgrade.label}
+                    {upgrade.kind === 'accessory' && (
+                      <span className="text-accent text-xs"> accessory</span>
+                    )}
+                    {upgrade.tiers.length > 0 && (
+                      <span className="text-accent text-xs"> · {upgrade.tiers.length} tiers</span>
+                    )}
+                  </td>
+                  <td className="py-2 pe-4 text-muted text-xs">{upgrade.variant?.name ?? 'all'}</td>
+                  <td className="py-2 pe-4 text-end tabular-nums" dir="ltr">
+                    {upgrade.amount.toFixed(2)}
+                  </td>
+                  <td className="py-2 pe-4 text-muted text-xs">{upgrade.unit}</td>
+                  <td className="py-2 pe-4 text-muted text-xs max-w-[14rem]">
+                    {upgrade.unavailableNote ?? (upgrade.condition ? 'conditional' : 'always')}
+                  </td>
+                  <td className="py-2 text-end">
+                    <form action={removeUpgrade}>
+                      <input type="hidden" name="id" value={upgrade.id} />
+                      <button className="text-xs text-red-300 hover:underline">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <div className="border border-line rounded-lg p-4 bg-surface/40">
+          <UpgradeForm
+            templateId={id}
+            variants={variantRows.map((v) => ({ id: v.id, code: v.code, name: v.name }))}
+            options={upgradeFormOptions}
+            derivedCodes={template.derivedQuantities.map((q) => q.code)}
+          />
+        </div>
+      </section>
+
+      {/* ---- Size bands -------------------------------------------------- */}
+      <section data-testid="bands">
+        <h2 className="text-lg font-semibold text-heading mb-1">Size bands</h2>
+        <p className="text-muted text-sm mb-3">
+          Automatic steps on a measurement — nobody ticks these. A size that falls through every
+          band is reported on the quote rather than charged as nothing.
+        </p>
+
+        {bandRows.length > 0 && (
+          <table className="w-full text-sm border-collapse mb-4">
+            <thead>
+              <tr className="text-start text-muted border-b border-line">
+                <th className="text-start py-2 pe-4">Measurement</th>
+                <th className="text-start py-2 pe-4">Name</th>
+                <th className="text-end py-2 pe-4">From</th>
+                <th className="text-end py-2 pe-4">Up to</th>
+                <th className="text-end py-2 pe-4">Adds</th>
+                <th className="text-start py-2 pe-4">Variant</th>
+                <th className="py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {bandRows.map((band) => (
+                <tr key={band.id} className="border-b border-line/50">
+                  <td className="py-2 pe-4 font-mono text-xs">{band.templateOption.group.code}</td>
+                  <td className="py-2 pe-4">{band.label}</td>
+                  <td className="py-2 pe-4 text-end tabular-nums text-muted" dir="ltr">
+                    {band.minValue?.toString() ?? '—'}
+                  </td>
+                  <td className="py-2 pe-4 text-end tabular-nums text-muted" dir="ltr">
+                    {band.maxValue?.toString() ?? '—'}
+                  </td>
+                  <td className="py-2 pe-4 text-end tabular-nums" dir="ltr">
+                    {band.amount.toFixed(2)}
+                  </td>
+                  <td className="py-2 pe-4 text-muted text-xs">{band.variant?.name ?? 'all'}</td>
+                  <td className="py-2 text-end">
+                    <form action={removeBand}>
+                      <input type="hidden" name="id" value={band.id} />
+                      <button className="text-xs text-red-300 hover:underline">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <div className="border border-line rounded-lg p-4 bg-surface/40">
+          <BandForm
+            templateId={id}
+            variants={variantRows.map((v) => ({ id: v.id, code: v.code, name: v.name }))}
+            measurements={measurementOptions}
+          />
         </div>
       </section>
     </div>

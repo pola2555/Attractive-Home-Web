@@ -150,7 +150,9 @@ function parseProductForm(
     }
   }
 
-  const applicationIds = fd.getAll('applications').filter((v): v is string => typeof v === 'string');
+  const applicationIds = fd
+    .getAll('applications')
+    .filter((v): v is string => typeof v === 'string');
   const performanceIds = fd.getAll('performance').filter((v): v is string => typeof v === 'string');
 
   return {
@@ -206,7 +208,9 @@ export async function createProduct(
     await prisma.$transaction(async (tx) => {
       await tx.product.create({ data: { id, legacyId, slug, ...data.scalars } });
       if (data.translations.length) {
-        await tx.productTranslation.createMany({ data: translationCreateData(id, data.translations) });
+        await tx.productTranslation.createMany({
+          data: translationCreateData(id, data.translations),
+        });
       }
       if (data.applicationIds.length) {
         await tx.productApplication.createMany({
@@ -258,7 +262,7 @@ export async function updateProduct(
 
   const existing = await prisma.product.findUnique({
     where: { id: productId },
-    select: { legacyId: true, slug: true, updatedAt: true },
+    select: { id: true, legacyId: true, slug: true, updatedAt: true },
   });
   if (!existing) return { error: 'Product not found.' };
 
@@ -311,7 +315,7 @@ export async function updateProduct(
   await writeAudit({
     userId: user.id,
     entityType: 'product',
-    entityId: existing.legacyId,
+    entityId: existing.legacyId ?? existing.id,
     action: 'update',
     diff: { slug: { from: existing.slug, to: slug } },
   });
@@ -327,7 +331,7 @@ export async function deleteProduct(productId: string): Promise<void> {
   const user = await requirePermission('catalog.write');
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { legacyId: true, slug: true },
+    select: { id: true, legacyId: true, slug: true },
   });
   if (!product) redirect('/dashboard/products');
 
@@ -337,7 +341,7 @@ export async function deleteProduct(productId: string): Promise<void> {
   await writeAudit({
     userId: user.id,
     entityType: 'product',
-    entityId: product.legacyId,
+    entityId: product.legacyId ?? product.id,
     action: 'delete',
     diff: { slug: { from: product.slug, to: null } },
   });
@@ -382,18 +386,25 @@ export async function saveProductRow(productId: string, formData: FormData): Pro
 
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { legacyId: true, price: true, priceUnit: true, featuredRank: true },
+    select: { id: true, legacyId: true, price: true, priceUnit: true, featuredRank: true },
   });
   if (!product) return;
-  if (Number(product.price) === price && product.priceUnit === priceUnit && product.featuredRank === featuredRank) {
+  if (
+    Number(product.price) === price &&
+    product.priceUnit === priceUnit &&
+    product.featuredRank === featuredRank
+  ) {
     return;
   }
 
-  await prisma.product.update({ where: { id: productId }, data: { price, priceUnit, featuredRank } });
+  await prisma.product.update({
+    where: { id: productId },
+    data: { price, priceUnit, featuredRank },
+  });
   await writeAudit({
     userId: user.id,
     entityType: 'product',
-    entityId: product.legacyId,
+    entityId: product.legacyId ?? product.id,
     action: 'update',
     diff: {
       price: { from: Number(product.price), to: price },
@@ -408,14 +419,14 @@ export async function setProductPublished(productId: string, next: boolean): Pro
   const user = await requirePermission('catalog.write');
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { legacyId: true, isPublished: true },
+    select: { id: true, legacyId: true, isPublished: true },
   });
   if (!product || product.isPublished === next) return;
   await prisma.product.update({ where: { id: productId }, data: { isPublished: next } });
   await writeAudit({
     userId: user.id,
     entityType: 'product',
-    entityId: product.legacyId,
+    entityId: product.legacyId ?? product.id,
     action: 'update',
     diff: { is_published: { from: product.isPublished, to: next } },
   });
@@ -432,7 +443,10 @@ export async function bulkSetPublished(ids: string[], next: boolean): Promise<vo
   const user = await requirePermission('catalog.write');
   const clean = idsSchema.safeParse(ids);
   if (!clean.success) return;
-  const res = await prisma.product.updateMany({ where: { id: { in: clean.data } }, data: { isPublished: next } });
+  const res = await prisma.product.updateMany({
+    where: { id: { in: clean.data } },
+    data: { isPublished: next },
+  });
   await writeAudit({
     userId: user.id,
     entityType: 'product',
@@ -447,9 +461,15 @@ export async function bulkSetSource(ids: string[], sourceId: string): Promise<vo
   const user = await requirePermission('catalog.write');
   const clean = idsSchema.safeParse(ids);
   if (!clean.success || !z.string().uuid().safeParse(sourceId).success) return;
-  const source = await prisma.source.findUnique({ where: { id: sourceId }, select: { code: true } });
+  const source = await prisma.source.findUnique({
+    where: { id: sourceId },
+    select: { code: true },
+  });
   if (!source) return;
-  const res = await prisma.product.updateMany({ where: { id: { in: clean.data } }, data: { sourceId } });
+  const res = await prisma.product.updateMany({
+    where: { id: { in: clean.data } },
+    data: { sourceId },
+  });
   await writeAudit({
     userId: user.id,
     entityType: 'product',
@@ -465,7 +485,10 @@ export async function bulkSetFeatured(ids: string[], rank: number | null): Promi
   const clean = idsSchema.safeParse(ids);
   if (!clean.success) return;
   const value = rank === null ? null : Math.max(0, Math.min(1_000_000, Math.trunc(rank)));
-  const res = await prisma.product.updateMany({ where: { id: { in: clean.data } }, data: { featuredRank: value } });
+  const res = await prisma.product.updateMany({
+    where: { id: { in: clean.data } },
+    data: { featuredRank: value },
+  });
   await writeAudit({
     userId: user.id,
     entityType: 'product',

@@ -343,12 +343,194 @@ async function quotingChecks() {
   await prisma.hsCode.deleteMany({ where: { code: 'BAD.01' } });
 }
 
+// ---------------------------------------------------------------------------
+// Variants, price grids, upgrades and bands
+// ---------------------------------------------------------------------------
+async function gridChecks() {
+  console.log('\nvariants + price grids:');
+
+  const template = await prisma.configTemplate.findUnique({
+    where: { code: 'benison_door' },
+    include: { variants: { include: { grid: { include: { axes: true, cells: true } } } } },
+  });
+  report(!!template, "seeded 'benison_door' template exists");
+  if (!template) return;
+
+  report(template.variants.length === 2, `two base variants — found ${template.variants.length}`);
+
+  const alu = template.variants.find((v) => v.code === 'alu_wpc');
+  const wood = template.variants.find((v) => v.code === 'wood');
+
+  report(
+    alu?.grid?.axes.length === 3,
+    `the aluminium grid is keyed on three answers — found ${alu?.grid?.axes.length ?? 0}`,
+  );
+
+  // The three states a cell can be in. Conflating any two of them loses a fact
+  // that somebody has to act on.
+  const priced = alu?.grid?.cells.filter((c) => c.amount !== null).length ?? 0;
+  const notSold = alu?.grid?.cells.filter((c) => c.amount === null).length ?? 0;
+  report(priced === 11, `eleven aluminium cells carry a price — found ${priced}`);
+  report(notSold === 4, `four are marked not sold — found ${notSold}`);
+  report(
+    (alu?.grid?.cells.length ?? 0) === 15,
+    `three 55 mm PUR cells were never published — ${18 - (alu?.grid?.cells.length ?? 0)} absent`,
+  );
+
+  report(
+    wood?.grid?.cells.length === 4,
+    `the wood grid holds four cells — found ${wood?.grid?.cells.length ?? 0}`,
+  );
+
+  // The evidence that the fork is real rather than cosmetic.
+  const sameColour = await prisma.configUpgrade.findMany({
+    where: { templateId: template.id, label: 'All same colour' },
+    select: { amount: true, variantId: true },
+  });
+  report(
+    sameColour.length === 2 && new Set(sameColour.map((u) => u.amount.toString())).size === 2,
+    `"All same colour" costs differently per variant — ${sameColour.map((u) => u.amount.toString()).join(' vs ')}`,
+  );
+
+  // A question bound to BOTH branches with different answers. This is what the
+  // partial unique index exists to permit.
+  const boardGroup = await prisma.optionGroup.findUnique({ where: { code: 'ben_board' } });
+  const boardBindings = await prisma.configTemplateOption.findMany({
+    where: { templateId: template.id, groupId: boardGroup?.id },
+    include: { values: true },
+  });
+  report(
+    boardBindings.length === 2,
+    `board material is bound once per branch — found ${boardBindings.length}`,
+  );
+  report(
+    boardBindings.some((b) => b.values.length === 3) &&
+      boardBindings.some((b) => b.values.length === 1),
+    'each branch offers its own board materials — 3 on aluminium, 1 on wood',
+  );
+
+  // The partial unique index itself: a shared question cannot be bound twice.
+  const widthGroup = await prisma.optionGroup.findUnique({ where: { code: 'ben_width' } });
+  let duplicateRejected = false;
+  try {
+    await prisma.configTemplateOption.create({
+      data: {
+        id: uuidv7(),
+        templateId: template.id,
+        groupId: widthGroup!.id,
+        variantId: null,
+        sortOrder: 99,
+      },
+    });
+  } catch {
+    duplicateRejected = true;
+  }
+  report(duplicateRejected, 'a shared question cannot be bound to one template twice');
+
+  // Bands: at least one bound, and the CHECK that stops an unbounded catch-all.
+  const bands = await prisma.configBand.count({ where: { templateId: template.id } });
+  report(bands === 4, `four size bands seeded — found ${bands}`);
+
+  const heightOption = await prisma.configTemplateOption.findFirst({
+    where: { templateId: template.id, group: { code: 'ben_height' } },
+  });
+  let unboundedRejected = false;
+  try {
+    await prisma.configBand.create({
+      data: {
+        id: uuidv7(),
+        templateId: template.id,
+        templateOptionId: heightOption!.id,
+        code: 'bad_unbounded',
+        label: 'matches everything',
+        amount: 5,
+      },
+    });
+  } catch {
+    unboundedRejected = true;
+  }
+  report(unboundedRejected, 'a band with no bounds is rejected — it would price every door');
+
+  let invertedRejected = false;
+  try {
+    await prisma.configBand.create({
+      data: {
+        id: uuidv7(),
+        templateId: template.id,
+        templateOptionId: heightOption!.id,
+        code: 'bad_inverted',
+        label: 'from 900 to 100',
+        minValue: 900,
+        maxValue: 100,
+        amount: 5,
+      },
+    });
+  } catch {
+    invertedRejected = true;
+  }
+  report(invertedRejected, 'a band whose bounds are inverted is rejected');
+
+  // Vocabulary CHECKs.
+  let badUnitRejected = false;
+  try {
+    await prisma.configUpgrade.create({
+      data: {
+        id: uuidv7(),
+        templateId: template.id,
+        code: 'bad_unit',
+        label: 'nonsense',
+        amount: 1,
+        unit: 'per_furlong',
+      },
+    });
+  } catch {
+    badUnitRejected = true;
+  }
+  report(badUnitRejected, 'an unknown upgrade unit is rejected at the database');
+
+  // The made-to-order escape hatch, and the guarantee it did not weaken.
+  const product = await prisma.product.findUnique({
+    where: { slug: 'benison-interior-door' },
+    select: { kind: true, legacyId: true, sourceId: true },
+  });
+  report(
+    product?.kind === 'made_to_order' && product.legacyId === null,
+    'a made-to-order product needs no invented supplier code',
+  );
+  report(!!product?.sourceId, 'it still records which factory it comes from');
+
+  let stockWithoutLegacyRejected = false;
+  try {
+    await prisma.product.create({
+      data: {
+        id: uuidv7(),
+        kind: 'stock',
+        slug: 'bad-stock-product',
+        sourceId: product!.sourceId,
+      },
+    });
+  } catch {
+    stockWithoutLegacyRejected = true;
+  }
+  report(stockWithoutLegacyRejected, 'a STOCK product still cannot exist without its legacy id');
+
+  await prisma.product.deleteMany({ where: { slug: 'bad-stock-product' } });
+  await prisma.configBand.deleteMany({
+    where: { code: { in: ['bad_unbounded', 'bad_inverted'] } },
+  });
+  await prisma.configUpgrade.deleteMany({ where: { code: 'bad_unit' } });
+  await prisma.configTemplateOption.deleteMany({
+    where: { sortOrder: 99, templateId: template.id },
+  });
+}
+
 async function main() {
   await spotChecks();
   await queryDrills();
   await rbacChecks();
   await leadChecks();
   await quotingChecks();
+  await gridChecks();
   console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;
 }

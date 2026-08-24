@@ -17,7 +17,8 @@ import {
   nextQuoteReference,
   recostShipment,
 } from '@/lib/quotesAdmin';
-import { priceConfiguration, pricingInputsHash } from '@/lib/configurator/price';
+import { pricingInputsHash } from '@/lib/configurator/price';
+import { priceProduct } from '@/lib/configurator/product';
 import { describeSelection, resolveConfiguration } from '@/lib/configurator/resolve';
 import type { Selection } from '@/lib/configurator/types';
 
@@ -54,6 +55,31 @@ const selectionSchema = z.record(
     valueIds: z.array(z.string()).optional(),
   }),
 );
+
+// Upgrade code -> quantity. A non-positive quantity is treated as unticked
+// rather than rejected, so an empty box in the form is not an error.
+const upgradesSchema = z.record(z.string(), z.number().int().positive());
+
+function parseUpgrades(fd: FormData): Record<string, number> {
+  const raw = str(fd, 'upgradesJson');
+  if (!raw) return {};
+  try {
+    const parsed = upgradesSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
+}
+
+/** What was ticked when the line was saved, for re-pricing it later. */
+function storedUpgrades(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [code, qty] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof qty === 'number' && Number.isFinite(qty) && qty > 0) out[code] = qty;
+  }
+  return out;
+}
 
 function parseSelection(fd: FormData): Selection | null {
   const raw = str(fd, 'selectionJson');
@@ -220,14 +246,25 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
 
   // Re-validated server-side. The client already showed these messages, but a
   // form post is not required to come from that client.
-  const resolution = resolveConfiguration(template, selection, quantity);
+  const picked = parseUpgrades(fd);
+
+  const resolution = resolveConfiguration(template, selection, quantity, picked);
   if (!resolution.isComplete) {
     return { error: resolution.issues[0]?.message ?? 'The configuration is incomplete.' };
   }
 
   const productRules = productId ? await getProductRules(productId) : [];
-  const priced = priceConfiguration(template, selection, quantity, productRules);
+  const priced = priceProduct({ template, selection, picked, quantity, extraRules: productRules });
   if (priced.issues.length) return { error: priced.issues[0] };
+
+  // A configuration that resolved cleanly can still have no price: the cell
+  // may be one the supplier does not sell, or one nobody has filled in yet.
+  // Storing 0.00 for either would put a free door on a quote.
+  if (!priced.isPriceable) {
+    return {
+      error: 'This combination has no price. Change an answer, or fill the gap in the price grid.',
+    };
+  }
 
   // HS code, most specific first: the item override, then the product's, then
   // the template's, then the settings default. A configured item carries no
@@ -268,6 +305,7 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
       codeSnapshot: nullableStr(fd, 'code'),
       selection: selection as object,
       selectionLabel: describeSelection(template, selection),
+      upgrades: picked as object,
       derived: resolution.derived as object,
       unitCost: priced.unitCost,
       costCurrency: priced.currency,
@@ -275,6 +313,9 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
         lines: priced.breakdown,
         lineExtras: priced.lineExtras,
         quoteExtras: priced.quoteExtras,
+        gridKey: priced.grid.key,
+        bands: priced.bandLines,
+        upgrades: priced.upgradeLines,
       },
       pricedAt: new Date(),
       pricingInputsHash: pricingInputsHash([...template.rules, ...productRules]),
@@ -315,14 +356,24 @@ export async function updateQuoteItemQuantity(fd: FormData): Promise<void> {
 
   if (template) {
     const selection = item.selection as Selection;
+    const picked = storedUpgrades(item.upgrades);
     const productRules = item.productId ? await getProductRules(item.productId) : [];
-    const priced = priceConfiguration(template, selection, quantity, productRules);
+    const priced = priceProduct({
+      template,
+      selection,
+      picked,
+      quantity,
+      extraRules: productRules,
+    });
     if (!priced.issues.length) {
       data.unitCost = priced.unitCost;
       data.priceBreakdown = {
         lines: priced.breakdown,
         lineExtras: priced.lineExtras,
         quoteExtras: priced.quoteExtras,
+        gridKey: priced.grid.key,
+        bands: priced.bandLines,
+        upgrades: priced.upgradeLines,
       };
       data.pricedAt = new Date();
     }
@@ -378,9 +429,16 @@ export async function repriceQuote(fd: FormData): Promise<void> {
     if (!template) continue;
     const productRules = item.productId ? await getProductRules(item.productId) : [];
     const selection = item.selection as Selection;
+    const picked = storedUpgrades(item.upgrades);
     const quantity = item.quantity.toNumber();
-    const resolution = resolveConfiguration(template, selection, quantity);
-    const priced = priceConfiguration(template, selection, quantity, productRules);
+    const resolution = resolveConfiguration(template, selection, quantity, picked);
+    const priced = priceProduct({
+      template,
+      selection,
+      picked,
+      quantity,
+      extraRules: productRules,
+    });
     if (priced.issues.length) continue;
 
     await prisma.quoteItem.update({
@@ -530,7 +588,10 @@ export async function toggleComponentLock(fd: FormData): Promise<void> {
   // re-costing will no longer overwrite it.
   await prisma.costComponent.update({
     where: { id: componentId },
-    data: { isLocked: !component.isLocked, source: !component.isLocked ? 'manual' : component.source },
+    data: {
+      isLocked: !component.isLocked,
+      source: !component.isLocked ? 'manual' : component.source,
+    },
   });
 
   await writeAudit({

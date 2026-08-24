@@ -20,6 +20,7 @@ async function quoteWithADoor(page: Page): Promise<string> {
   ]);
   quoteUrl = page.url();
 
+  await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'solid_oak');
   await page.fill('#cfg-thickness', '45');
