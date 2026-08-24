@@ -14,6 +14,7 @@ const MODE_LABELS: Record<string, string> = {
   air: 'Air (per chargeable kg)',
 };
 
+// Primitives only — a Prisma Decimal cannot cross into a client component.
 type ShipmentLike = {
   mode: string;
   originPort: string;
@@ -23,26 +24,27 @@ type ShipmentLike = {
   containerCount: number | null;
   expectedStorageDays: number;
   isManualOverride: boolean;
-  volumeCbm: { toString(): string } | null;
-  grossWeightKg: { toString(): string } | null;
+  volumeCbm: string | null;
+  grossWeightKg: string | null;
   notes: string | null;
 };
 
 export default function ShipmentPanel({
-  quote,
+  quoteId,
+  shipment,
   canWrite,
   rolledVolumeCbm,
   rolledWeightKg,
   modes,
 }: {
-  quote: { id: string; shipment: ShipmentLike | null };
+  quoteId: string;
+  shipment: ShipmentLike | null;
   canWrite: boolean;
   rolledVolumeCbm: number;
   rolledWeightKg: number;
   modes: { mode: FreightMode; expected: number | null; currency: string; note?: string }[];
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateShipment, {});
-  const shipment = quote.shipment;
   const [mode, setMode] = useState(shipment?.mode ?? 'sea_lcl');
   const [override, setOverride] = useState(shipment?.isManualOverride ?? false);
 
@@ -53,7 +55,7 @@ export default function ShipmentPanel({
       {/* Modes are compared SIDE BY SIDE and never blended into one band: the
           maximum of an air quote plus the maximum of sea port storage describes
           a shipment that does not exist. */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-3" data-testid="freight-modes">
         {modes.map((row) => (
           <div
             key={row.mode}
@@ -73,7 +75,7 @@ export default function ShipmentPanel({
       </div>
 
       <form action={formAction} className="space-y-4 border border-line rounded-lg p-4">
-        <input type="hidden" name="quoteId" value={quote.id} />
+        <input type="hidden" name="quoteId" value={quoteId} />
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
@@ -182,7 +184,7 @@ export default function ShipmentPanel({
               name="volumeCbm"
               type="number"
               step="0.001"
-              defaultValue={shipment.volumeCbm?.toString() ?? rolledVolumeCbm.toFixed(3)}
+              defaultValue={shipment.volumeCbm ?? rolledVolumeCbm.toFixed(3)}
               disabled={!canWrite || !override}
               className={inputCls}
             />
@@ -196,7 +198,7 @@ export default function ShipmentPanel({
               name="grossWeightKg"
               type="number"
               step="0.001"
-              defaultValue={shipment.grossWeightKg?.toString() ?? rolledWeightKg.toFixed(3)}
+              defaultValue={shipment.grossWeightKg ?? rolledWeightKg.toFixed(3)}
               disabled={!canWrite || !override}
               className={inputCls}
             />

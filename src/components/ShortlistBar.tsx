@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import RequestQuoteForm, { type RequestQuoteLabels } from './quote/RequestQuoteForm';
 import Link from 'next/link';
 import SmartImage from './SmartImage';
 import { SAVE_KEY, COMPARE_KEY, useIds, removeId, clearKey } from './shortlistStore';
@@ -25,6 +26,8 @@ type Item = {
 };
 
 export type ShortlistLabels = {
+  requestQuote: string;
+  quote: RequestQuoteLabels;
   compare: string;
   compareNow: string;
   clear: string;
@@ -46,17 +49,24 @@ export type ShortlistLabels = {
   };
 };
 
-export default function ShortlistBar({ locale, labels }: { locale: string; labels: ShortlistLabels }) {
+export default function ShortlistBar({
+  locale,
+  labels,
+}: {
+  locale: string;
+  labels: ShortlistLabels;
+}) {
   // Saved list follows the same source as the card ♥: server favorites when the
   // customer is signed in, otherwise the anonymous localStorage shortlist.
   // Compare is always localStorage.
   const favorites = useFavorites();
   const localSavedIds = useIds(SAVE_KEY);
   const savedIds = favorites.authed ? favorites.ids : localSavedIds;
-  const removeSaved = (id: string) => (favorites.authed ? favorites.toggle(id) : removeId(SAVE_KEY, id));
+  const removeSaved = (id: string) =>
+    favorites.authed ? favorites.toggle(id) : removeId(SAVE_KEY, id);
   const compareIds = useIds(COMPARE_KEY);
   const [items, setItems] = useState<Record<string, Item>>({});
-  const [overlay, setOverlay] = useState<null | 'compare' | 'short'>(null);
+  const [overlay, setOverlay] = useState<null | 'compare' | 'short' | 'request'>(null);
   const [copied, setCopied] = useState(false);
   const attempted = useRef<Set<string>>(new Set());
 
@@ -100,8 +110,10 @@ export default function ShortlistBar({ locale, labels }: { locale: string; label
     }
   };
 
-  const accentBtn = 'rounded-xl px-4 py-2 font-bold bg-accent text-white hover:brightness-110 transition';
-  const ghostBtn = 'rounded-xl px-4 py-2 font-bold bg-transparent text-ink border border-line hover:border-accent/60 transition';
+  const accentBtn =
+    'rounded-xl px-4 py-2 font-bold bg-accent text-white hover:brightness-110 transition';
+  const ghostBtn =
+    'rounded-xl px-4 py-2 font-bold bg-transparent text-ink border border-line hover:border-accent/60 transition';
 
   const compareCols = compareIds.map((id) => items[id]).filter((it): it is Item => Boolean(it));
   const rows: { label: string; get: (it: Item) => string | null }[] = [
@@ -111,7 +123,10 @@ export default function ShortlistBar({ locale, labels }: { locale: string; label
     { label: labels.spec.color, get: (it) => it.color?.name ?? null },
     { label: labels.spec.finish, get: (it) => it.finish },
     { label: labels.spec.size, get: (it) => it.size },
-    { label: labels.spec.application, get: (it) => it.applications.filter(Boolean).join(', ') || null },
+    {
+      label: labels.spec.application,
+      get: (it) => it.applications.filter(Boolean).join(', ') || null,
+    },
     { label: labels.spec.collection, get: (it) => it.collection },
     { label: labels.spec.brand, get: (it) => it.brand },
   ];
@@ -163,10 +178,18 @@ export default function ShortlistBar({ locale, labels }: { locale: string; label
                 );
               })}
             </div>
-            <button type="button" onClick={() => clearKey(COMPARE_KEY)} className={`${ghostBtn} shrink-0`}>
+            <button
+              type="button"
+              onClick={() => clearKey(COMPARE_KEY)}
+              className={`${ghostBtn} shrink-0`}
+            >
               {labels.clear}
             </button>
-            <button type="button" onClick={() => setOverlay('compare')} className={`${accentBtn} shrink-0`}>
+            <button
+              type="button"
+              onClick={() => setOverlay('compare')}
+              className={`${accentBtn} shrink-0`}
+            >
               {labels.compareNow}
             </button>
           </div>
@@ -202,7 +225,10 @@ export default function ShortlistBar({ locale, labels }: { locale: string; label
                       <tr>
                         <th className="border border-line p-2.5" />
                         {compareCols.map((it) => (
-                          <th key={it.id} className="border border-line p-2.5 text-start bg-surface text-heading">
+                          <th
+                            key={it.id}
+                            className="border border-line p-2.5 text-start bg-surface text-heading"
+                          >
                             {it.name}
                           </th>
                         ))}
@@ -251,9 +277,22 @@ export default function ShortlistBar({ locale, labels }: { locale: string; label
                   <p className="text-muted">{labels.noSaved}</p>
                 ) : (
                   <>
-                    <button type="button" onClick={copyCodes} className={copied ? `${accentBtn} !bg-green-600` : accentBtn}>
-                      {copied ? `✓ ${labels.copied}` : labels.copyCodes}
-                    </button>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setOverlay('request')}
+                        className={accentBtn}
+                      >
+                        {labels.requestQuote}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={copyCodes}
+                        className={copied ? `${accentBtn} !bg-green-600` : accentBtn}
+                      >
+                        {copied ? `✓ ${labels.copied}` : labels.copyCodes}
+                      </button>
+                    </div>
                     <div
                       className="grid gap-[18px] mt-5"
                       style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}
@@ -293,7 +332,9 @@ export default function ShortlistBar({ locale, labels }: { locale: string; label
                               <p className="text-ink text-sm font-bold truncate" title={it.name}>
                                 {it.name}
                               </p>
-                              {it.code && <p className="text-muted text-xs mt-0.5 truncate">{it.code}</p>}
+                              {it.code && (
+                                <p className="text-muted text-xs mt-0.5 truncate">{it.code}</p>
+                              )}
                             </div>
                           </div>
                         );
@@ -302,6 +343,22 @@ export default function ShortlistBar({ locale, labels }: { locale: string; label
                   </>
                 )}
               </>
+            )}
+
+            {overlay === 'request' && (
+              <div className="max-w-lg">
+                <h2 className="text-heading text-xl font-bold mb-4">{labels.quote.title}</h2>
+                {/* The shortlist finally submits somewhere: this creates a Lead
+                    and a linked draft quote the team opens in the dashboard.
+                    Customers never see a price — they ask, the team prices it. */}
+                <RequestQuoteForm
+                  productIds={savedIds}
+                  locale={locale}
+                  sourcePath={`/${locale}`}
+                  labels={labels.quote}
+                  onDone={() => setOverlay(null)}
+                />
+              </div>
             )}
           </div>
         </div>

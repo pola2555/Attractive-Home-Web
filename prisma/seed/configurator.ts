@@ -104,6 +104,10 @@ const GROUPS: GroupSeed[] = [
 // quote-item level.
 const TEMPLATE = { code: 'door', name: 'Door (configurable)', currency: 'USD' };
 
+// Wooden doors and their frames. Set on the template so a configured item —
+// which carries no product to inherit from — still has a real duty rate.
+const TEMPLATE_HS_CODE = '4418.20';
+
 export async function seedConfigurator(prisma: PrismaClient): Promise<void> {
   // ---- vocabulary -------------------------------------------------------
   const groupIdByCode = new Map<string, string>();
@@ -167,10 +171,13 @@ export async function seedConfigurator(prisma: PrismaClient): Promise<void> {
   }
 
   // ---- template ---------------------------------------------------------
+  const hsCode = await prisma.hsCode.findUnique({ where: { code: TEMPLATE_HS_CODE } });
   const template = await prisma.configTemplate.upsert({
     where: { code: TEMPLATE.code },
-    update: {},
-    create: { id: uuidv7(), ...TEMPLATE },
+    // The one field re-applied on re-run: an existing template seeded before
+    // hs_code_id existed would otherwise stay without a duty rate.
+    update: { hsCodeId: hsCode?.id ?? null },
+    create: { id: uuidv7(), ...TEMPLATE, hsCodeId: hsCode?.id ?? null },
   });
 
   // sort_order is the DAG: a condition or formula may only look BACKWARDS, so

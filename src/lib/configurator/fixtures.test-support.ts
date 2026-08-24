@@ -11,6 +11,7 @@ export function doorTemplate(): TemplateDef {
     code: 'door',
     name: 'Door (configurable)',
     currency: 'USD',
+    hsCodeId: null,
     options: [
       {
         id: 'o-type',

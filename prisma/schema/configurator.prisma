@@ -135,6 +135,11 @@ model ConfigTemplate {
   // surface in a quote's selection label.
   name String
 
+  // What this template's products ARE, for customs. Without it a configured
+  // item has no HS code path at all — it carries no product to inherit one
+  // from — and duty would silently fall back to the 5% default on every quote.
+  hsCodeId String? @map("hs_code_id") @db.Uuid
+
   // Every pricing rule on this template must use this currency. Mixed-currency
   // rules would make the engine depend on quote context (an FX table) to
   // resolve a subtotal; instead FX conversion happens exactly once, at
@@ -145,6 +150,8 @@ model ConfigTemplate {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  hsCode HsCode? @relation(fields: [hsCodeId], references: [id], onDelete: Restrict)
+
   options           ConfigTemplateOption[]
   constraints       ConfigTemplateConstraint[]
   derivedQuantities ConfigDerivedQuantity[]
@@ -152,6 +159,7 @@ model ConfigTemplate {
   products          Product[]
   quoteItems        QuoteItem[]
 
+  @@index([hsCodeId])
   @@map("config_templates")
 }
 

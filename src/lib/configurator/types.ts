@@ -147,6 +147,8 @@ export type TemplateDef = {
   code: string;
   name: string;
   currency: string;
+  /** Customs classification for items configured from this template. */
+  hsCodeId: string | null;
   options: OptionDef[];
   constraints: ConstraintDef[];
   derivedQuantities: DerivedQuantityDef[];

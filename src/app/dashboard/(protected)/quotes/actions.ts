@@ -229,7 +229,10 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
   const priced = priceConfiguration(template, selection, quantity, productRules);
   if (priced.issues.length) return { error: priced.issues[0] };
 
-  // HS code: the item override, else the product's, else the settings default.
+  // HS code, most specific first: the item override, then the product's, then
+  // the template's, then the settings default. A configured item carries no
+  // product, so without the template step it would reach customs unclassified
+  // and duty would quietly default to 5%.
   const settings = await getLandedSettings();
   let hsCodeId = nullableStr(fd, 'hsCodeId');
   if (!hsCodeId && productId) {
@@ -239,6 +242,7 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
     });
     hsCodeId = product?.hsCodeId ?? null;
   }
+  if (!hsCodeId) hsCodeId = template.hsCodeId;
   if (!hsCodeId && settings.defaultHsCode) {
     const fallback = await prisma.hsCode.findUnique({ where: { code: settings.defaultHsCode } });
     hsCodeId = fallback?.id ?? null;

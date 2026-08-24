@@ -17,7 +17,11 @@ import '../globals.css';
 
 // Cairo carries the Arabic glyphs; Brown Pro (loaded via @font-face in
 // globals.css) stays the primary Latin face, matching the old site.
-const cairo = Cairo({ subsets: ['arabic', 'latin'], weight: ['400', '600', '700'], variable: '--font-cairo' });
+const cairo = Cairo({
+  subsets: ['arabic', 'latin'],
+  weight: ['400', '600', '700'],
+  variable: '--font-cairo',
+});
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -30,11 +34,16 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
-  const [common, tracking] = await Promise.all([getDictionary(locale, 'common'), getTrackingSettings()]);
+  const [common, tracking] = await Promise.all([
+    getDictionary(locale, 'common'),
+    getTrackingSettings(),
+  ]);
   return {
     title: { default: t(common, 'documentTitle'), template: '%s | Attractive Home' },
     // Google Search Console verification meta tag (DNS TXT is the primary method).
-    ...(tracking.googleVerification ? { verification: { google: tracking.googleVerification } } : {}),
+    ...(tracking.googleVerification
+      ? { verification: { google: tracking.googleVerification } }
+      : {}),
   };
 }
 
@@ -65,6 +74,23 @@ export default async function LocaleLayout({
     copied: t(catalog, 'copied'),
     noSaved: t(catalog, 'noSaved'),
     close: t(catalog, 'close'),
+    requestQuote: t(catalog, 'requestQuote'),
+    // Threaded down as a prop, like every other label: client components never
+    // import getDictionary.
+    quote: {
+      title: t(catalog, 'quote.title'),
+      intro: t(catalog, 'quote.intro'),
+      name: t(catalog, 'quote.name'),
+      phone: t(catalog, 'quote.phone'),
+      email: t(catalog, 'quote.email'),
+      emailOptional: t(catalog, 'quote.emailOptional'),
+      message: t(catalog, 'quote.message'),
+      submit: t(catalog, 'quote.submit'),
+      submitting: t(catalog, 'quote.submitting'),
+      success: t(catalog, 'quote.success'),
+      error: t(catalog, 'quote.error'),
+      cancel: t(catalog, 'quote.cancel'),
+    },
     spec: {
       type: t(catalog, 'facet.type'),
       material: t(catalog, 'facet.material'),
@@ -131,7 +157,13 @@ export default async function LocaleLayout({
         }
       : {}),
     ...(settings.geo
-      ? { geo: { '@type': 'GeoCoordinates', latitude: settings.geo.lat, longitude: settings.geo.lng } }
+      ? {
+          geo: {
+            '@type': 'GeoCoordinates',
+            latitude: settings.geo.lat,
+            longitude: settings.geo.lng,
+          },
+        }
       : {}),
     sameAs: settings.socialLinks.map((l) => l.url),
   };

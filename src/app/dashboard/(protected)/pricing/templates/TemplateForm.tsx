@@ -9,8 +9,17 @@ const labelCls = 'block text-sm text-muted mb-1';
 
 export default function TemplateForm({
   template,
+  hsCodes = [],
 }: {
-  template?: { id: string; code: string; name: string; currency: string; isActive: boolean };
+  template?: {
+    id: string;
+    code: string;
+    name: string;
+    currency: string;
+    isActive: boolean;
+    hsCodeId: string | null;
+  };
+  hsCodes?: { id: string; code: string; description: string }[];
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(saveTemplate, {});
 
@@ -62,6 +71,29 @@ export default function TemplateForm({
           <input type="checkbox" name="isActive" defaultChecked={template?.isActive ?? true} />{' '}
           Active
         </label>
+      </div>
+
+      <div className="max-w-lg">
+        <label className={labelCls} htmlFor="t-hs">
+          Customs classification
+        </label>
+        <select
+          id="t-hs"
+          name="hsCodeId"
+          defaultValue={template?.hsCodeId ?? ''}
+          className={inputCls}
+        >
+          <option value="">None — duty falls back to 5% with a warning</option>
+          {hsCodes.map((hs) => (
+            <option key={hs.id} value={hs.id}>
+              {hs.code} — {hs.description}
+            </option>
+          ))}
+        </select>
+        <p className="text-muted text-xs mt-1">
+          An item configured here carries no product, so this is its only route to a real duty
+          rate.
+        </p>
       </div>
 
       {state.error && (

@@ -211,6 +211,9 @@ export async function saveTemplate(_prev: FormState, fd: FormData): Promise<Form
     // engine to consult an FX table mid-calculation, and it is deliberately a
     // pure function that never does.
     currency: (str(fd, 'currency') || 'USD').toUpperCase().slice(0, 3),
+    // Items configured from this template carry no product, so this is their
+    // only route to a real duty rate.
+    hsCodeId: nullableStr(fd, 'hsCodeId'),
     isActive: fd.get('isActive') === 'on',
   };
 

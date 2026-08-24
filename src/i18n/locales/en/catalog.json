@@ -60,5 +60,20 @@
     "selling": "Selling",
     "packing": "Packing",
     "weight": "Weight"
+  },
+  "requestQuote": "Request a quote",
+  "quote": {
+    "title": "Request a quote",
+    "intro": "Send us your saved products and our team will price them for you, including delivery to the UAE.",
+    "name": "Your name",
+    "phone": "Phone number",
+    "email": "Email",
+    "emailOptional": "(optional)",
+    "message": "Anything we should know? Sizes, quantities, timeline…",
+    "submit": "Send request",
+    "submitting": "Sending…",
+    "success": "Thank you. Our team will be in touch shortly with your quote.",
+    "error": "Something went wrong. Please check your details and try again.",
+    "cancel": "Close"
   }
 }

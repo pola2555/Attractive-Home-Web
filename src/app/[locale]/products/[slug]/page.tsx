@@ -132,7 +132,9 @@ export default async function ProductPage({
     fallback: image.supplierUrl,
   }));
 
-  const price = Number(product.price);
+  // Prices are INTERNAL ONLY. Customers request; the team prices the request
+  // through the quote assembly screen in the dashboard. `products.price` stays
+  // as the cost basis the configurator and landed-cost engines read.
   const waText = encodeURIComponent(
     `${t(dict, 'whatsappMessage')}\n${name}${product.code ? ` (${product.code})` : ''}\n${localeUrl(locale, `/products/${slug}`)}`,
   );
@@ -153,7 +155,9 @@ export default async function ProductPage({
     include: productCardInclude(locale),
   });
 
-  // Product structured data for rich results; offers only once real prices exist.
+  // Product structured data for rich results. Deliberately NO `offers` node:
+  // prices are internal, and structured data is published data even when
+  // nothing on the page renders it.
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -161,25 +165,15 @@ export default async function ProductPage({
     sku: product.code ?? undefined,
     image: galleryImages.map((i) => i.src),
     description: tr?.description ?? undefined,
-    brand: product.brand
-      ? { '@type': 'Brand', name: facetName(product.brand, locale) }
-      : undefined,
-    offers:
-      price > 0
-        ? {
-            '@type': 'Offer',
-            price: price.toFixed(2),
-            priceCurrency: product.currency,
-            availability: product.isAvailable
-              ? 'https://schema.org/InStock'
-              : 'https://schema.org/OutOfStock',
-          }
-        : undefined,
+    brand: product.brand ? { '@type': 'Brand', name: facetName(product.brand, locale) } : undefined,
   };
 
   return (
     <section className="bg-bg min-h-screen pt-28 sm:pt-32 pb-16 px-4 sm:px-6 lg:px-10">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="max-w-6xl mx-auto">
         <BackLink
           href={`/${locale}/catalog`}
@@ -205,17 +199,13 @@ export default async function ProductPage({
               )}
             </div>
 
-            {price > 0 && (
-              <p className="text-2xl font-semibold text-accent">
-                {product.currency} {price.toFixed(2)}
-                {product.priceUnit && <span className="text-base text-muted"> / {product.priceUnit}</span>}
-              </p>
-            )}
-
             {performanceBadges.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {performanceBadges.map((badge) => (
-                  <span key={badge} className="text-xs bg-accent-2/15 text-heading border border-accent-2/40 rounded-full px-3 py-1">
+                  <span
+                    key={badge}
+                    className="text-xs bg-accent-2/15 text-heading border border-accent-2/40 rounded-full px-3 py-1"
+                  >
                     {badge}
                   </span>
                 ))}
@@ -234,12 +224,18 @@ export default async function ProductPage({
             )}
 
             {tr?.description && <p className="text-ink-soft leading-relaxed">{tr.description}</p>}
-            {tr?.usageNotes && <p className="text-muted text-sm leading-relaxed">{tr.usageNotes}</p>}
+            {tr?.usageNotes && (
+              <p className="text-muted text-sm leading-relaxed">{tr.usageNotes}</p>
+            )}
 
             <div className="flex flex-wrap items-center gap-3">
               <TrackedLink
                 event="whatsapp_click"
-                params={{ location: 'product', product_slug: slug, product_code: product.code ?? undefined }}
+                params={{
+                  location: 'product',
+                  product_slug: slug,
+                  product_code: product.code ?? undefined,
+                }}
                 href={`https://wa.me/${settings.whatsapp}?text=${waText}`}
                 target="_blank"
                 rel="noopener noreferrer"

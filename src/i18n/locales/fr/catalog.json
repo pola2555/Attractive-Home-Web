@@ -60,5 +60,20 @@
     "selling": "Vente",
     "packing": "Conditionnement",
     "weight": "Poids"
+  },
+  "requestQuote": "Demander un devis",
+  "quote": {
+    "title": "Demander un devis",
+    "intro": "Envoyez-nous vos produits enregistrés et notre équipe établira un devis, livraison aux Émirats comprise.",
+    "name": "Votre nom",
+    "phone": "Numéro de téléphone",
+    "email": "E-mail",
+    "emailOptional": "(facultatif)",
+    "message": "Des précisions ? Dimensions, quantités, délais…",
+    "submit": "Envoyer la demande",
+    "submitting": "Envoi…",
+    "success": "Merci. Notre équipe vous contactera prochainement avec votre devis.",
+    "error": "Une erreur est survenue. Vérifiez vos informations et réessayez.",
+    "cancel": "Fermer"
   }
 }

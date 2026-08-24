@@ -129,6 +129,7 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
     code: row.code,
     name: row.name,
     currency: row.currency,
+    hsCodeId: row.hsCodeId,
     options,
     constraints,
     derivedQuantities: row.derivedQuantities.map((q) => ({

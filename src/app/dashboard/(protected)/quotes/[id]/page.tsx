@@ -106,7 +106,26 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      <QuoteHeaderForm quote={quote} staff={staff} canWrite={canWrite} />
+      {/* Prisma Decimal is not a plain object, so it cannot cross the
+          server/client boundary. Everything handed to a client component is
+          flattened to primitives here rather than at the far end. */}
+      <QuoteHeaderForm
+        quote={{
+          id: quote.id,
+          title: quote.title,
+          notes: quote.notes,
+          status: quote.status,
+          assignedTo: quote.assignedTo,
+          contingencyPercent: quote.contingencyPercent.toString(),
+          validUntil: quote.validUntil ? quote.validUntil.toISOString().slice(0, 10) : null,
+          updatedAt: quote.updatedAt.toISOString(),
+          fxRates: (quote.fxRates as Record<string, number> | null) ?? {},
+          fxRatesAt: quote.fxRatesAt ? quote.fxRatesAt.toISOString().slice(0, 10) : null,
+          quoteCurrency: quote.quoteCurrency,
+        }}
+        staff={staff}
+        canWrite={canWrite}
+      />
 
       <section>
         <h2 className="text-lg font-semibold text-heading mb-3">Items</h2>
@@ -127,7 +146,24 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
       <section>
         <h2 className="text-lg font-semibold text-heading mb-3">Shipment</h2>
         <ShipmentPanel
-          quote={quote}
+          quoteId={quote.id}
+          shipment={
+            quote.shipment
+              ? {
+                  mode: quote.shipment.mode,
+                  originPort: quote.shipment.originPort,
+                  destinationPort: quote.shipment.destinationPort,
+                  incoterm: quote.shipment.incoterm,
+                  containerType: quote.shipment.containerType,
+                  containerCount: quote.shipment.containerCount,
+                  expectedStorageDays: quote.shipment.expectedStorageDays,
+                  isManualOverride: quote.shipment.isManualOverride,
+                  volumeCbm: quote.shipment.volumeCbm?.toString() ?? null,
+                  grossWeightKg: quote.shipment.grossWeightKg?.toString() ?? null,
+                  notes: quote.shipment.notes,
+                }
+              : null
+          }
           canWrite={canWrite && editable}
           rolledVolumeCbm={rolled.volumeCbm}
           rolledWeightKg={rolled.grossWeightKg}

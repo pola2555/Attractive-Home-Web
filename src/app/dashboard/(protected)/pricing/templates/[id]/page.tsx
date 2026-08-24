@@ -24,10 +24,15 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
   if (!permissions.has('pricing.write')) redirect('/dashboard');
 
   const { id } = await params;
-  const [template, row, groups] = await Promise.all([
+  const [template, row, groups, hsCodes] = await Promise.all([
     getTemplate(id),
     prisma.configTemplate.findUnique({ where: { id } }),
     listOptionGroups(),
+    prisma.hsCode.findMany({
+      where: { isActive: true },
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, description: true },
+    }),
   ]);
   if (!template || !row) notFound();
 
@@ -61,7 +66,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
       </div>
 
       <section className="border border-line rounded-lg p-4 bg-surface/40">
-        <TemplateForm template={row} />
+        <TemplateForm template={row} hsCodes={hsCodes} />
       </section>
 
       <section>

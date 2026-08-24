@@ -9,17 +9,19 @@ const inputCls =
   'w-full px-3 py-2 bg-surface text-ink rounded-lg border border-line-strong focus:outline-none focus:ring-2 focus:ring-accent';
 const labelCls = 'block text-sm text-muted mb-1';
 
+// Primitives only. A Prisma Decimal or Date reaching a client component is a
+// React serialization error, so the server component flattens them first.
 type QuoteHeader = {
   id: string;
   title: string | null;
   notes: string | null;
   status: string;
   assignedTo: string | null;
-  contingencyPercent: { toString(): string };
-  validUntil: Date | null;
-  updatedAt: Date;
-  fxRatesAt: Date | null;
-  fxRates: unknown;
+  contingencyPercent: string;
+  validUntil: string | null;
+  updatedAt: string;
+  fxRatesAt: string | null;
+  fxRates: Record<string, number>;
   quoteCurrency: string;
 };
 
@@ -33,14 +35,14 @@ export default function QuoteHeaderForm({
   canWrite: boolean;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateQuote, {});
-  const fxRates = (quote.fxRates as Record<string, number> | null) ?? {};
+  const fxRates = quote.fxRates;
 
   return (
     <form action={formAction} className="space-y-4 border border-line rounded-lg p-4">
       <UnsavedChangesGuard />
       <input type="hidden" name="quoteId" value={quote.id} />
       {/* Optimistic lock: two people can have this quote open at once. */}
-      <input type="hidden" name="expectedUpdatedAt" value={quote.updatedAt.toISOString()} />
+      <input type="hidden" name="expectedUpdatedAt" value={quote.updatedAt} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="col-span-2">
@@ -103,7 +105,7 @@ export default function QuoteHeaderForm({
             step="0.1"
             min="0"
             max="100"
-            defaultValue={quote.contingencyPercent.toString()}
+            defaultValue={quote.contingencyPercent}
             disabled={!canWrite}
             className={inputCls}
           />
@@ -119,7 +121,7 @@ export default function QuoteHeaderForm({
             id="q-valid"
             name="validUntil"
             type="date"
-            defaultValue={quote.validUntil?.toISOString().slice(0, 10) ?? ''}
+            defaultValue={quote.validUntil ?? ''}
             disabled={!canWrite}
             className={inputCls}
           />
@@ -147,7 +149,7 @@ export default function QuoteHeaderForm({
           .filter(([code]) => code !== quote.quoteCurrency)
           .map(([code, rate]) => `${code} ${rate}`)
           .join(' · ') || 'none'}
-        {quote.fxRatesAt && ` · taken ${quote.fxRatesAt.toISOString().slice(0, 10)}`}
+        {quote.fxRatesAt && ` · taken ${quote.fxRatesAt}`}
       </p>
 
       {state.error && (

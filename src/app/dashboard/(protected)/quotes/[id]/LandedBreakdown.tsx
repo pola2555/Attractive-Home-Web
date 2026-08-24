@@ -41,6 +41,7 @@ export default function LandedBreakdown({
           >
             <div className="text-xs text-muted">{cell.label}</div>
             <div
+              data-stat={cell.label}
               className={`text-xl ${cell.muted ? 'text-ink' : 'text-heading font-semibold'}`}
               dir="ltr"
             >
@@ -212,7 +213,9 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="border border-line rounded-lg p-3 bg-surface/40">
       <div className="text-xs text-muted">{label}</div>
-      <div className="text-ink" dir="ltr">
+      {/* data-stat gives the e2e specs a stable handle on the figure itself,
+          rather than walking the DOM from the label. */}
+      <div data-stat={label} className="text-ink" dir="ltr">
         {value}
       </div>
     </div>

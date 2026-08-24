@@ -49,3 +49,9 @@ docs/
 
 # internal migration planning doc (kept local)
 /MIGRATION-PLAN.md
+
+# Playwright
+/e2e/.output
+/e2e/.shots
+/test-results
+/playwright-report

@@ -34,6 +34,7 @@ model HsCode {
 
   products   Product[]
   quoteItems QuoteItem[]
+  templates  ConfigTemplate[]
 
   @@map("hs_codes")
 }
