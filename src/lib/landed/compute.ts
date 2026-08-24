@@ -90,7 +90,18 @@ export function computeLanded(input: LandedInput, scenario: Scenario): LandedRes
   // Duty is charged on CIF. Handling, inland and port storage happen AFTER
   // import and must stay out, or they inflate duty and VAT together.
   const cifLines = lines.filter((line) => line.inCustomsBase);
-  const postImportLines = lines.filter((line) => !line.inCustomsBase);
+
+  // Duty and VAT are DERIVED per item below, so a duty line in the ledger must
+  // not also be summed as an ordinary charge — that would bill it twice. A
+  // locked one is an actual customs invoice and OVERRIDES the computed figure;
+  // an unlocked one is someone's estimate of a number we already compute, and
+  // is ignored in favour of the calculation.
+  const dutyOverride = lines.find((line) => line.kind === 'customs_duty' && line.isLocked);
+  const vatOverride = lines.find((line) => line.kind === 'vat' && line.isLocked);
+
+  const postImportLines = lines.filter(
+    (line) => !line.inCustomsBase && line.kind !== 'customs_duty' && line.kind !== 'vat',
+  );
 
   const goodsFromLines = cifLines
     .filter((line) => line.kind === 'goods')
@@ -163,6 +174,38 @@ export function computeLanded(input: LandedInput, scenario: Scenario): LandedRes
   }
 
   const cifValue = goodsFromLines + freightAndInsurance;
+
+  // An actual customs invoice replaces the calculation. The per-item split is
+  // rescaled by the same ratio so the item figures still add up to the shipment
+  // ones — otherwise the line totals and the header would disagree.
+  if (dutyOverride && dutyTotal > 0) {
+    const scale = dutyOverride.amount / dutyTotal;
+    for (const result of items) {
+      const scaledDuty = round2(result.duty * scale);
+      result.landedTotal = round2(result.landedTotal + scaledDuty - result.duty);
+      result.duty = scaledDuty;
+      result.landedUnitCost =
+        result.quantity > 0 ? round2(result.landedTotal / result.quantity) : 0;
+    }
+    dutyTotal = dutyOverride.amount;
+    issues.push('Customs duty comes from a locked actual, not from the HS code rates.');
+  }
+
+  if (vatOverride && vatTotal > 0) {
+    const scale = vatOverride.amount / vatTotal;
+    for (const result of items) {
+      const scaledVat = round2(result.vat * scale);
+      // VAT only sits in landed cost when it is NOT recoverable.
+      if (!input.vatRecoverable) {
+        result.landedTotal = round2(result.landedTotal + scaledVat - result.vat);
+        result.landedUnitCost =
+          result.quantity > 0 ? round2(result.landedTotal / result.quantity) : 0;
+      }
+      result.vat = scaledVat;
+    }
+    vatTotal = vatOverride.amount;
+    issues.push('Import VAT comes from a locked actual, not from the HS code rates.');
+  }
 
   // ---- 5. Roll up ---------------------------------------------------------
   // Landed cost is what the goods cost the business. Cash outlay is what leaves

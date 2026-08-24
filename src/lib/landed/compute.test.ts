@@ -235,6 +235,71 @@ describe('scenarios are computed end to end, never summed per component', () => 
   });
 });
 
+describe('actual customs invoices override the calculation', () => {
+  it('ignores an unlocked duty line, because duty is already computed', () => {
+    // Double-billing guard: an estimate of a number the calculator derives must
+    // not also be summed as an ordinary charge.
+    const result = computeLanded(
+      input({
+        components: [
+          component({ kind: 'goods', amount: 10_000 }),
+          component({
+            kind: 'customs_duty',
+            label: 'Estimated duty',
+            amount: 9_999,
+            inCustomsBase: false,
+          }),
+        ],
+      }),
+      'expected',
+    );
+    assert.equal(result.dutyTotal, 500);
+    assert.equal(result.landedCost, 10_500);
+  });
+
+  it('takes a LOCKED duty line as the truth', () => {
+    const result = computeLanded(
+      input({
+        components: [
+          component({ kind: 'goods', amount: 10_000 }),
+          component({
+            kind: 'customs_duty',
+            label: 'Mirsal-2 duty',
+            amount: 612.4,
+            inCustomsBase: false,
+            isLocked: true,
+          }),
+        ],
+      }),
+      'expected',
+    );
+    assert.equal(result.dutyTotal, 612.4);
+    assert.ok(result.issues.some((i) => i.includes('locked actual')));
+  });
+
+  it('rescales the per-item split so lines still add up to the header', () => {
+    const result = computeLanded(
+      input({
+        components: [
+          component({ kind: 'goods', amount: 20_000 }),
+          component({
+            kind: 'customs_duty',
+            label: 'Actual duty',
+            amount: 1_200,
+            inCustomsBase: false,
+            isLocked: true,
+          }),
+        ],
+        items: [item({ id: 'a', goodsValue: 15_000 }), item({ id: 'b', goodsValue: 5_000 })],
+      }),
+      'expected',
+    );
+    const summed = result.items.reduce((total, i) => total + i.duty, 0);
+    assert.equal(round2(summed), 1_200);
+    assert.equal(result.items.find((i) => i.id === 'a')?.duty, 900); // 75%
+  });
+});
+
 describe('currency conversion', () => {
   it('converts a supplier cost into the quote currency', () => {
     const result = computeLanded(
@@ -276,3 +341,7 @@ describe('rounding', () => {
     assert.equal(Math.round(summed * 100) / 100, result.cifValue);
   });
 });
+
+function round2(value: number): number {
+  return Math.round(value * 100 + Number.EPSILON) / 100;
+}

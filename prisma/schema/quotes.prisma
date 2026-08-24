@@ -115,7 +115,7 @@ model QuoteItem {
   // unitCost was reached.
   priceBreakdown Json? @map("price_breakdown")
 
-  priced_at DateTime? @map("priced_at") @db.Timestamptz(6)
+  pricedAt DateTime? @map("priced_at") @db.Timestamptz(6)
 
   // Hash of the rule rows that were applied. On load, a mismatch against the
   // current rules shows a "pricing changed since this was priced — re-price?"
