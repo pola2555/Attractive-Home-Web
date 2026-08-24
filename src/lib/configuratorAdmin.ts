@@ -13,6 +13,7 @@ import type {
   PricingBasis,
   ApplyPer,
   TemplateDef,
+  UpgradeUnit,
 } from './configurator/types';
 
 // The bridge between Prisma rows and the pure engine in src/lib/configurator/.
@@ -86,11 +87,54 @@ const templateInclude = {
   constraints: { where: { isActive: true } },
   derivedQuantities: { orderBy: { sortOrder: 'asc' } },
   pricingRules: { where: { isActive: true } },
+  variants: {
+    where: { isActive: true },
+    orderBy: { sortOrder: 'asc' },
+    include: {
+      grid: {
+        include: {
+          // Axis ORDER is load-bearing: the cell key is built from it, and
+          // reading the axes back in any other order silently misses every
+          // cell in the grid.
+          axes: {
+            orderBy: { position: 'asc' },
+            include: { templateOption: { include: { group: { select: { code: true } } } } },
+          },
+          cells: true,
+        },
+      },
+    },
+  },
+  upgrades: {
+    where: { isActive: true },
+    orderBy: { sortOrder: 'asc' },
+    include: {
+      variant: { select: { code: true } },
+      tiers: { orderBy: { minQty: 'asc' } },
+      effects: { include: { templateOption: { include: { group: { select: { code: true } } } } } },
+    },
+  },
+  bands: {
+    where: { isActive: true },
+    orderBy: { sortOrder: 'asc' },
+    include: {
+      variant: { select: { code: true } },
+      templateOption: { include: { group: { select: { code: true } } } },
+    },
+  },
 } satisfies Prisma.ConfigTemplateInclude;
 
 type TemplateRow = Prisma.ConfigTemplateGetPayload<{ include: typeof templateInclude }>;
 
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
 function toTemplateDef(row: TemplateRow): TemplateDef {
+  // Options carry a variant ID; the engine works in codes so it can be tested
+  // and reasoned about without a database.
+  const variantCodeById = new Map(row.variants.map((v) => [v.id, v.code]));
+
   const options: OptionDef[] = row.options.map((option) => ({
     id: option.id,
     groupCode: option.group.code,
@@ -103,6 +147,8 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
     defaultValueCode: option.defaultValue?.code ?? null,
     condition: asCondition(option.condition),
     ranges: asRanges(option.ranges),
+    variantCode: variantCodeById.get(option.variantId ?? '') ?? null,
+    configText: option.configText,
     values: option.values.map((join) => ({
       id: join.value.id,
       code: join.value.code,
@@ -113,6 +159,8 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
       productId: join.value.productId,
       sortOrder: join.sortOrder,
       condition: asCondition(join.condition),
+      configText: join.configText,
+      imageUrl: join.imageUrl,
     })),
   }));
 
@@ -139,6 +187,75 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
       sortOrder: q.sortOrder,
     })),
     rules: row.pricingRules.map(toPricingRule),
+    standardNote: row.standardNote,
+
+    variants: row.variants.map((variant) => ({
+      id: variant.id,
+      code: variant.code,
+      name: variant.name,
+      includedSpec: variant.includedSpec,
+      imageUrl: variant.imageUrl,
+      sortOrder: variant.sortOrder,
+      grid: variant.grid
+        ? {
+            id: variant.grid.id,
+            currency: variant.grid.currency,
+            axes: variant.grid.axes.map((axis) => axis.templateOption.group.code),
+            // A cell with a NULL amount stays in the map as null — that is the
+            // supplier's dash, and it is not the same fact as a missing key.
+            cells: Object.fromEntries(
+              variant.grid.cells.map((cell) => [cell.key, num(cell.amount)]),
+            ),
+          }
+        : null,
+    })),
+
+    upgrades: row.upgrades.map((upgrade) => ({
+      id: upgrade.id,
+      code: upgrade.code,
+      label: upgrade.label,
+      detail: upgrade.detail,
+      section: upgrade.section,
+      kind: upgrade.kind === 'accessory' ? ('accessory' as const) : ('upgrade' as const),
+      variantCode: upgrade.variant?.code ?? null,
+      amount: upgrade.amount.toNumber(),
+      unit: upgrade.unit as UpgradeUnit,
+      quantityCode: upgrade.quantityCode,
+      defaultQty: upgrade.defaultQty,
+      minQty: upgrade.minQty,
+      maxQty: upgrade.maxQty,
+      productId: upgrade.productId,
+      condition: asCondition(upgrade.condition),
+      unavailableNote: upgrade.unavailableNote,
+      tiers: upgrade.tiers.map((tier) => ({
+        minQty: tier.minQty,
+        unitAmount: tier.unitAmount.toNumber(),
+      })),
+      effects: upgrade.effects.map((effect) => ({
+        kind:
+          effect.kind === 'set'
+            ? ('set' as const)
+            : effect.kind === 'note'
+              ? ('note' as const)
+              : ('restrict' as const),
+        groupCode: effect.templateOption?.group.code ?? null,
+        valueCodes: asStringArray(effect.valueCodes),
+        message: effect.message,
+      })),
+      sortOrder: upgrade.sortOrder,
+    })),
+
+    bands: row.bands.map((band) => ({
+      id: band.id,
+      code: band.code,
+      label: band.label,
+      groupCode: band.templateOption.group.code,
+      variantCode: band.variant?.code ?? null,
+      min: num(band.minValue),
+      max: num(band.maxValue),
+      amount: band.amount.toNumber(),
+      sortOrder: band.sortOrder,
+    })),
   };
 }
 

@@ -42,7 +42,35 @@ export type PriceBreakdownLine = {
   amount: number | null;
   /** Signed, in the template currency. */
   contribution: number;
+  /**
+   * Where the money came from. A salesperson reading a build-up needs to know
+   * whether a figure is the supplier's published cell, an automatic size step,
+   * something they ticked, or a margin the company applied.
+   */
+  source?: 'rule' | 'grid' | 'band' | 'upgrade';
+  /** Human label for seeded lines; rules are identified by their code. */
+  label?: string;
 };
+
+/**
+ * Figures injected into a stage before its rules run.
+ *
+ * The grid price and the upgrades a person ticked are not rules, but they have
+ * to take part in the SAME staged arithmetic — otherwise a 32% margin would be
+ * taken on an empty base and the upgrades would escape it entirely. Seeding
+ * them keeps one pricing path, so `percent`-of-previous-stage keeps meaning
+ * exactly what it meant before any of this existed.
+ */
+export type PriceSeedLine = {
+  code: string;
+  label: string;
+  amount: number;
+  source: 'grid' | 'band' | 'upgrade';
+  /** Charged once per line rather than per unit — a survey fee, say. */
+  perLine?: boolean;
+};
+
+export type PriceSeed = Partial<Record<PricingStage, PriceSeedLine[]>>;
 
 export type PriceResult = {
   currency: string;
@@ -77,6 +105,7 @@ export function priceConfiguration(
   selection: Selection,
   quantity = 1,
   extraRules: PricingRuleDef[] = [],
+  seed: PriceSeed = {},
 ): PriceResult {
   const issues: string[] = [];
   const breakdown: PriceBreakdownLine[] = [];
@@ -101,12 +130,38 @@ export function priceConfiguration(
 
   for (const stage of PRICING_STAGES) {
     const stageRules = rules.filter((rule) => rule.stage === stage);
-    if (stageRules.length === 0) continue;
+    const stageSeed = seed[stage] ?? [];
+    if (stageRules.length === 0 && stageSeed.length === 0) continue;
 
     // Frozen before the stage runs — this is what makes the stage order the
     // only thing that matters, and rule order within a stage irrelevant.
     const stageBase = unitSubtotal;
     let stageDelta = 0;
+
+    // Seeded figures land first, but because a percentage reads `stageBase`
+    // rather than the running total, "first" costs nothing: within a stage the
+    // arithmetic stays commutative whichever way round they are added.
+    for (const line of stageSeed) {
+      if (!Number.isFinite(line.amount)) {
+        issues.push(`"${line.label}" produced a value that is not a number.`);
+        continue;
+      }
+      breakdown.push({
+        ruleCode: line.code,
+        stage,
+        basis: 'flat',
+        applyPer: line.perLine ? 'line' : 'unit',
+        quantityCode: null,
+        quantityValue: null,
+        rate: null,
+        amount: line.amount,
+        contribution: round2(line.amount),
+        source: line.source,
+        label: line.label,
+      });
+      if (line.perLine) lineExtras += line.amount;
+      else stageDelta += line.amount;
+    }
 
     for (const rule of stageRules) {
       if (evaluateCondition(rule.condition, conditionScope) !== 'yes') continue;
@@ -163,6 +218,7 @@ export function priceConfiguration(
         rate: rule.rate,
         amount: rule.amount,
         contribution: round2(contribution),
+        source: 'rule',
       });
 
       // A one-off tooling charge on 12 doors is charged once, not twelve times.

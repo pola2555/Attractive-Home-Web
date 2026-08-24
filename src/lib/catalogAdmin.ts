@@ -172,7 +172,7 @@ export async function getProductForEdit(id: string): Promise<ProductFormInitial 
 
   return {
     id: product.id,
-    legacyId: product.legacyId,
+    legacyId: product.legacyId ?? '',
     updatedAt: product.updatedAt.toISOString(),
     slug: product.slug,
     code: product.code ?? '',
