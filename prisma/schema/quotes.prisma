@@ -97,6 +97,13 @@ model QuoteItem {
   selection      Json
   selectionLabel String? @map("selection_label") // '45mm × 2100 × 900, Oak'
 
+  // Which upgrades were ticked, and how many of each: {alu_side_hinge_std: 3}.
+  // Stored separately from `selection` because they are answers to a different
+  // kind of question — one that adds money rather than narrowing the tree — and
+  // because re-pricing a line without them would silently drop every add-on
+  // the customer agreed to.
+  upgrades Json?
+
   // Computed by the formula evaluator: {area_m2: 1.89, weight_kg: 42.3}.
   // A null entry means the formula failed and the item needs review — never
   // silently 0, because a weight of 0 makes freight free.

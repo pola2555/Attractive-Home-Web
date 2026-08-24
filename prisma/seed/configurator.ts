@@ -234,19 +234,27 @@ export async function seedConfigurator(prisma: PrismaClient): Promise<void> {
   for (const option of OPTIONS) {
     const groupId = groupIdByCode.get(option.group);
     if (!groupId) throw new Error(`Unknown option group in template seed: ${option.group}`);
-    const row = await prisma.configTemplateOption.upsert({
-      where: { templateId_groupId: { templateId: template.id, groupId } },
-      update: {},
-      create: {
-        id: uuidv7(),
-        templateId: template.id,
-        groupId,
-        sortOrder: option.sortOrder,
-        isRequired: option.isRequired,
-        condition: option.condition,
-        ranges: option.ranges,
-      },
+    // Find-then-create rather than an upsert: a question can now be bound
+    // once per variant, so UNIQUE(template_id, group_id) became two PARTIAL
+    // indexes that Prisma cannot address as a compound key. This template has
+    // no variants, so the binding it wants is the variant-less one.
+    const existing = await prisma.configTemplateOption.findFirst({
+      where: { templateId: template.id, groupId, variantId: null },
+      select: { id: true },
     });
+    const row =
+      existing ??
+      (await prisma.configTemplateOption.create({
+        data: {
+          id: uuidv7(),
+          templateId: template.id,
+          groupId,
+          sortOrder: option.sortOrder,
+          isRequired: option.isRequired,
+          condition: option.condition,
+          ranges: option.ranges,
+        },
+      }));
     templateOptionIdByGroup.set(option.group, row.id);
   }
 

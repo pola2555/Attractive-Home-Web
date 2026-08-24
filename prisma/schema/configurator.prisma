@@ -146,6 +146,11 @@ model ConfigTemplate {
   // quote-item level, and the engine stays a pure function.
   currency String @default("AED") @db.Char(3)
 
+  // What every variant includes before an upgrade is added, and what the
+  // published prices assume: "Standard opening 2170 x 950 x 300 mm". Every
+  // size band is priced RELATIVE to this, so it is load-bearing, not a note.
+  standardNote String? @map("standard_note")
+
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -158,6 +163,9 @@ model ConfigTemplate {
   pricingRules      PricingRule[]
   products          Product[]
   quoteItems        QuoteItem[]
+  variants          ConfigVariant[]
+  upgrades          ConfigUpgrade[]
+  bands             ConfigBand[]
 
   @@index([hsCodeId])
   @@map("config_templates")
@@ -167,6 +175,16 @@ model ConfigTemplateOption {
   id         String @id @db.Uuid
   templateId String @map("template_id") @db.Uuid
   groupId    String @map("group_id") @db.Uuid
+
+  // NULL = the question is asked on every variant. Set = it belongs to that
+  // branch alone, which is what lets "Thickness" exist on the aluminium frame
+  // and "Grade" on the wood frame without either leaking into the other.
+  variantId String? @map("variant_id") @db.Uuid
+
+  // The supplier's "Configuration" column when it is the same for every
+  // option — "Frame + 1 lock + 3x 2D hinges". Per-option text lives on
+  // ConfigTemplateOptionValue instead, and the editor chooses which to use.
+  configText String? @map("config_text")
 
   // sort_order is load-bearing, not cosmetic. A condition or formula may only
   // reference groups with a LOWER sort_order (enforced in the save action), so
@@ -197,13 +215,20 @@ model ConfigTemplateOption {
   template     ConfigTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   group        OptionGroup    @relation(fields: [groupId], references: [id], onDelete: Restrict)
   defaultValue OptionValue?   @relation(fields: [defaultValueId], references: [id], onDelete: SetNull)
+  variant      ConfigVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
-  values ConfigTemplateOptionValue[]
+  values         ConfigTemplateOptionValue[]
+  gridAxes       ConfigPriceGridAxis[]
+  bands          ConfigBand[]
+  upgradeEffects ConfigUpgradeEffect[]
 
-  @@unique([templateId, groupId])
+  // The old UNIQUE(template_id, group_id) is replaced in the migration by two
+  // PARTIAL unique indexes, because Postgres treats NULLs as distinct and
+  // would otherwise let the same shared question be bound twice.
   @@index([templateId, sortOrder])
   @@index([groupId])
   @@index([defaultValueId])
+  @@index([variantId])
   @@map("config_template_options")
 }
 
@@ -215,6 +240,13 @@ model ConfigTemplateOptionValue {
   // NULL = always available. Otherwise the value is offered only when the
   // condition matches the current selection. THIS IS THE TREE.
   condition Json?
+
+  // Per-option overrides of the question's own text and picture. The wood
+  // frame prices two grades whose builds genuinely differ (flush hinges and a
+  // grid core against 3D hinges and a graphite board), so the description has
+  // to be able to hang on the option rather than the question.
+  configText String? @map("config_text")
+  imageUrl   String? @map("image_url")
 
   templateOption ConfigTemplateOption @relation(fields: [templateOptionId], references: [id], onDelete: Cascade)
   value          OptionValue          @relation(fields: [valueId], references: [id], onDelete: Cascade)
@@ -331,4 +363,278 @@ model PricingRule {
   @@index([templateId, stage, priority])
   @@index([productId, stage, priority])
   @@map("pricing_rules")
+}
+
+// ---------------------------------------------------------------------------
+// Variants, price grids, upgrades and bands
+//
+// WHY THIS EXISTS, WHEN THE ENGINE ABOVE ALREADY PRICES A CONFIGURATION
+//
+// The engine above assumes price is CALCULATED — area x a rate, weight x a
+// rate. Real supplier price lists are not calculated; they are published as a
+// TABLE. The Benison door's base price depends on thickness, edge banding and
+// board material simultaneously, and roughly half of the resulting cells are
+// combinations the factory does not sell at all. Reproducing that through
+// conditional rules means writing one rule per cell and rewriting every one of
+// them at each reprice, so the grid below stores it in the shape the supplier
+// sends it.
+//
+// Formulas do not go away — they move to where they are genuinely needed:
+// weight and volume for the freight calculation, which no price list carries.
+//
+// Hand-added SQL in this migration (Prisma cannot express it):
+//   partial UNIQUE on config_template_options for the nullable variant_id
+//   CHECK (num_nonnulls(min_value, max_value) >= 1) on config_bands
+//   CHECK on products: a 'stock' product still needs legacy_id + source_id
+// ---------------------------------------------------------------------------
+
+// The fork. "Aluminum Frame + WPC" and "Wood Frame" are not two options inside
+// one question — they carry different questions, different prices AND
+// different upgrades. The proof they are genuinely separate: "All same colour"
+// exists in both, at +30 and +15 respectively, which no single shared upgrade
+// row could represent.
+//
+// Every template has at least one variant, even a product with no real fork.
+// A nullable "no variant" path would double every query below for no gain.
+model ConfigVariant {
+  id         String @id @db.Uuid
+  templateId String @map("template_id") @db.Uuid
+  code       String
+  name       String
+
+  // What the customer gets before a single upgrade is ticked, quoted verbatim
+  // from the supplier's "Configuration" column. Not decoration: it is what
+  // makes an upgrade legible — "standard is an offset hinge" is the reason
+  // paying for a concealed one counts as an upgrade.
+  includedSpec String? @map("included_spec")
+  imageUrl     String? @map("image_url")
+
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  template ConfigTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  options  ConfigTemplateOption[]
+  grid     ConfigPriceGrid?
+  upgrades ConfigUpgrade[]
+  bands    ConfigBand[]
+
+  @@unique([templateId, code])
+  @@index([templateId, sortOrder])
+  @@map("config_variants")
+}
+
+// One grid per variant. Its axes are the questions whose answers TOGETHER
+// determine the base price.
+model ConfigPriceGrid {
+  id        String  @id @db.Uuid
+  variantId String  @unique @map("variant_id") @db.Uuid
+  currency  String  @default("USD") @db.Char(3)
+  note      String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  variant ConfigVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  axes  ConfigPriceGridAxis[]
+  cells ConfigPriceCell[]
+
+  @@map("config_price_grids")
+}
+
+// A real table rather than a JSON array of group ids: an axis points at a
+// template option, and deleting that option has to invalidate the grid rather
+// than leave cells keyed on a question that no longer exists.
+model ConfigPriceGridAxis {
+  id               String @id @db.Uuid
+  gridId           String @map("grid_id") @db.Uuid
+  templateOptionId String @map("template_option_id") @db.Uuid
+  position         Int
+
+  grid           ConfigPriceGrid      @relation(fields: [gridId], references: [id], onDelete: Cascade)
+  templateOption ConfigTemplateOption @relation(fields: [templateOptionId], references: [id], onDelete: Cascade)
+
+  @@unique([gridId, position])
+  @@unique([gridId, templateOptionId])
+  @@index([templateOptionId])
+  @@map("config_price_grid_axes")
+}
+
+model ConfigPriceCell {
+  id     String @id @db.Uuid
+  gridId String @map("grid_id") @db.Uuid
+
+  // Value codes joined by '|' in axis position order: '45|alu_silent|wpc'.
+  // Denormalised from `coords` so a lookup is one indexed equality test rather
+  // than a JSON containment scan on every keystroke of the sales screen.
+  key String
+
+  // The same coordinates as {groupCode: valueCode}. Kept because the key alone
+  // is unreadable in a database session and impossible to re-key if an axis is
+  // ever reordered.
+  coords Json
+
+  // NULL IS MEANINGFUL: the editor has seen this cell and marked it not sold —
+  // the dash in the supplier's sheet. A cell with no row at all is a different
+  // state, "not entered yet", which the editor reports as incomplete instead
+  // of silently treating as unavailable.
+  amount Decimal? @db.Decimal(12, 2)
+
+  note String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  grid ConfigPriceGrid @relation(fields: [gridId], references: [id], onDelete: Cascade)
+
+  @@unique([gridId, key])
+  @@map("config_price_cells")
+}
+
+// A selectable add-on. NOT an option_group: option group codes are globally
+// unique, and nineteen upgrades per product would fill that shared vocabulary
+// with product-specific rows like `benison_flat_outside` inside a month.
+// Upgrades belong to the product that sells them.
+model ConfigUpgrade {
+  id         String  @id @db.Uuid
+  templateId String  @map("template_id") @db.Uuid
+  // NULL = offered on every variant. The craftsmanship options are listed
+  // after both tables in the supplier's sheet without saying which frame they
+  // belong to, which is one of the open questions raised with the client.
+  variantId  String? @map("variant_id") @db.Uuid
+
+  // The supplier's own grouping, kept so the editor screen can mirror the
+  // sheet it was typed from: 'Upgrade Items', 'Craftsmanship', 'Locks'.
+  section String?
+
+  code   String
+  label  String
+  detail String?
+
+  // 'upgrade' = a tick box. 'accessory' = a bought part with its own quantity,
+  // and usually its own product row for the HS code and weight.
+  kind String @default("upgrade")
+
+  amount Decimal @db.Decimal(12, 2)
+
+  // 'flat' | 'per_unit' | 'per_set' | 'per_sqm' | 'per_piece'
+  unit String @default("flat")
+
+  // For 'per_sqm' and friends: which derived quantity multiplies the amount.
+  quantityCode String? @map("quantity_code")
+
+  defaultQty Int  @default(1) @map("default_qty")
+  minQty     Int  @default(1) @map("min_qty")
+  maxQty     Int? @map("max_qty")
+
+  // An accessory that is a real SKU inherits its customs code and weight from
+  // that product rather than restating them here, where they would drift.
+  productId String? @map("product_id") @db.Uuid
+
+  // NULL = always offered.
+  condition Json?
+  // Shown when the condition fails, so the sales screen can say WHY an upgrade
+  // is greyed out instead of hiding it: "only available on 45 and 55 mm".
+  unavailableNote String? @map("unavailable_note")
+
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  template ConfigTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  variant  ConfigVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  product  Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  tiers   ConfigUpgradeTier[]
+  effects ConfigUpgradeEffect[]
+
+  @@unique([templateId, code])
+  @@index([templateId, sortOrder])
+  @@index([variantId])
+  @@index([productId])
+  @@map("config_upgrades")
+}
+
+// Quantity breaks: a colour pamphlet is 30.00 for one, 15.00 each at 100 and
+// 10.00 each at 200. The highest minQty at or below the ordered quantity wins.
+model ConfigUpgradeTier {
+  id         String  @id @db.Uuid
+  upgradeId  String  @map("upgrade_id") @db.Uuid
+  minQty     Int     @map("min_qty")
+  unitAmount Decimal @map("unit_amount") @db.Decimal(12, 2)
+
+  upgrade ConfigUpgrade @relation(fields: [upgradeId], references: [id], onDelete: Cascade)
+
+  @@unique([upgradeId, minQty])
+  @@map("config_upgrade_tiers")
+}
+
+// An upgrade that reaches back and changes another question. Both directions
+// appear in the Benison list: "flat outside, inward opening" REPLACES the
+// standard offset hinge with a concealed one, and the 1050-1220 mm width band
+// RESTRICTS the colour list to five.
+model ConfigUpgradeEffect {
+  id        String @id @db.Uuid
+  upgradeId String @map("upgrade_id") @db.Uuid
+
+  // 'restrict' = only these values stay selectable.
+  // 'set'      = force this value and lock the question.
+  // 'note'     = no mechanical effect, just tell the salesperson.
+  kind String
+
+  templateOptionId String? @map("template_option_id") @db.Uuid
+  // Value codes as an array. Codes rather than ids, so the effect survives a
+  // value being re-created — the same reasoning as the quote-item snapshot.
+  valueCodes Json?   @map("value_codes")
+  message    String?
+
+  upgrade        ConfigUpgrade         @relation(fields: [upgradeId], references: [id], onDelete: Cascade)
+  templateOption ConfigTemplateOption? @relation(fields: [templateOptionId], references: [id], onDelete: Cascade)
+
+  @@index([upgradeId])
+  @@index([templateOptionId])
+  @@map("config_upgrade_effects")
+}
+
+// An automatic step on a numeric answer. Distinct from an upgrade because
+// nobody ticks it: the salesperson types the customer's height and the band
+// applies itself. Modelled separately from a pricing rule so the editor can
+// round-trip "2170-2240 -> +12" as three fields, instead of a nested condition
+// it would then have to parse back apart.
+model ConfigBand {
+  id               String  @id @db.Uuid
+  templateId       String  @map("template_id") @db.Uuid
+  variantId        String? @map("variant_id") @db.Uuid
+  templateOptionId String  @map("template_option_id") @db.Uuid
+
+  code  String
+  label String
+
+  // Half-open [minValue, maxValue): a door of exactly 1050 mm has to land in
+  // exactly one band, and the supplier's own list overlaps at that boundary.
+  minValue Decimal? @map("min_value") @db.Decimal(12, 4)
+  maxValue Decimal? @map("max_value") @db.Decimal(12, 4)
+
+  amount Decimal @db.Decimal(12, 2)
+
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  template       ConfigTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  variant        ConfigVariant?       @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  templateOption ConfigTemplateOption @relation(fields: [templateOptionId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, code])
+  @@index([templateOptionId, sortOrder])
+  @@index([variantId])
+  @@map("config_bands")
 }

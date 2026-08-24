@@ -9,6 +9,7 @@ import { seedSettings } from './settings';
 import { seedContentBlocks } from './content-blocks';
 import { seedLanded } from './landed';
 import { seedConfigurator } from './configurator';
+import { seedBenison } from './benison';
 
 const prisma = new PrismaClient();
 
@@ -21,6 +22,7 @@ async function main(): Promise<void> {
   await seedContentBlocks(prisma);
   await seedLanded(prisma);
   await seedConfigurator(prisma);
+  await seedBenison(prisma);
   console.log('Seed complete.');
 }
 

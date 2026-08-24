@@ -299,8 +299,21 @@ model SourceTranslation {
 // ---------------------------------------------------------------------------
 
 model Product {
-  id               String  @id @db.Uuid
-  legacyId         String  @unique @map("legacy_id") // 'P00501'
+  id String @id @db.Uuid
+
+  // 'stock' | 'made_to_order'. The catalog was built for imported tile SKUs,
+  // and every row demanded a supplier legacy id like 'P00501'. A made-to-order
+  // door has no such id — it is configured per request, not imported from a
+  // feed — so `legacy_id` is nullable below and a hand-added CHECK keeps it
+  // REQUIRED for 'stock', leaving the importer's guarantees intact.
+  //
+  // `source_id` deliberately stays REQUIRED. A made-to-order door still comes
+  // from a factory (Benison), and `sources` is exactly where a supplier
+  // belongs; relaxing it would have been a nullable column bought with a
+  // hundred null checks, in exchange for losing the supplier of every door.
+  kind String @default("stock")
+
+  legacyId         String? @unique @map("legacy_id") // 'P00501' — stock only
   shopifyProductId BigInt? @unique @map("shopify_product_id")
   slug             String  @unique // §8 step 5
   sourceId         String  @map("source_id") @db.Uuid
@@ -352,8 +365,9 @@ model Product {
   images       ProductImage[]
   leads        Lead[]
   favorites    CustomerFavorite[]
-  optionValues OptionValue[] // this product used as a configurator accessory
-  pricingRules PricingRule[] // product-scoped overrides of its template's rules
+  optionValues   OptionValue[]   // this product used as a configurator accessory
+  pricingRules   PricingRule[]   // product-scoped overrides of its template's rules
+  configUpgrades ConfigUpgrade[] // this product sold as a configurator accessory
   quoteItems   QuoteItem[]
 
   @@index([templateId])
