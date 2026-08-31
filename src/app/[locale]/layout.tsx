@@ -7,7 +7,6 @@ import { getContactSettings, getContentBlocks, getTrackingSettings } from '@/lib
 import Navbar, { type NavbarLabels } from '@/components/Navbar';
 import Footer, { type FooterLabels } from '@/components/Footer';
 import WhatsAppButton from '@/components/WhatsAppButton';
-import ShortlistBar, { type ShortlistLabels } from '@/components/ShortlistBar';
 import FavoritesProvider from '@/components/favorites/FavoritesProvider';
 import TrackingScripts from '@/components/TrackingScripts';
 import TrackingNoScript from '@/components/TrackingNoScript';
@@ -58,51 +57,11 @@ export default async function LocaleLayout({
   if (!isLocale(raw)) notFound();
   const locale: Locale = raw;
 
-  const [common, catalog, settings, blocks] = await Promise.all([
+  const [common, settings, blocks] = await Promise.all([
     getDictionary(locale, 'common'),
-    getDictionary(locale, 'catalog'),
     getContactSettings(),
     getContentBlocks(locale),
   ]);
-
-  const shortlistLabels: ShortlistLabels = {
-    compare: t(catalog, 'compare'),
-    compareNow: t(catalog, 'compareNow'),
-    clear: t(catalog, 'clear'),
-    saved: t(catalog, 'saved'),
-    copyCodes: t(catalog, 'copyCodes'),
-    copied: t(catalog, 'copied'),
-    noSaved: t(catalog, 'noSaved'),
-    close: t(catalog, 'close'),
-    requestQuote: t(catalog, 'requestQuote'),
-    // Threaded down as a prop, like every other label: client components never
-    // import getDictionary.
-    quote: {
-      title: t(catalog, 'quote.title'),
-      intro: t(catalog, 'quote.intro'),
-      name: t(catalog, 'quote.name'),
-      phone: t(catalog, 'quote.phone'),
-      email: t(catalog, 'quote.email'),
-      emailOptional: t(catalog, 'quote.emailOptional'),
-      message: t(catalog, 'quote.message'),
-      submit: t(catalog, 'quote.submit'),
-      submitting: t(catalog, 'quote.submitting'),
-      success: t(catalog, 'quote.success'),
-      error: t(catalog, 'quote.error'),
-      cancel: t(catalog, 'quote.cancel'),
-    },
-    spec: {
-      type: t(catalog, 'facet.type'),
-      material: t(catalog, 'facet.material'),
-      look: t(catalog, 'facet.look'),
-      color: t(catalog, 'facet.color'),
-      finish: t(catalog, 'spec.finish'),
-      size: t(catalog, 'facet.size'),
-      application: t(catalog, 'facet.application'),
-      collection: t(catalog, 'facet.collection'),
-      brand: t(catalog, 'facet.brand'),
-    },
-  };
 
   const navbarLabels: NavbarLabels = {
     about: t(common, 'nav.about'),
@@ -180,7 +139,6 @@ export default async function LocaleLayout({
           <Navbar locale={locale} labels={navbarLabels} />
           <main>{children}</main>
           <WhatsAppButton number={settings.whatsapp} label={t(common, 'whatsapp')} />
-          <ShortlistBar locale={locale} labels={shortlistLabels} />
         </FavoritesProvider>
         <Footer locale={locale} labels={footerLabels} socialLinks={settings.socialLinks} />
         <RouteAnalytics locale={locale} />

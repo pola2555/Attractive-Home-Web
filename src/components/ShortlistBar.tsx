@@ -317,15 +317,19 @@ export default function ShortlistBar({
                               <button
                                 type="button"
                                 aria-label={labels.close}
-                                onClick={() => removeSaved(id)}
-                                className="absolute top-2 end-2 w-7 h-7 rounded-lg bg-on-media/95 text-on-accent shadow flex items-center justify-center"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  removeSaved(id);
+                                }}
+                                className="absolute top-2 end-2 z-20 w-7 h-7 rounded-lg bg-on-media/95 text-on-accent shadow flex items-center justify-center"
                               >
                                 ✕
                               </button>
                               <Link
                                 href={`/${locale}/products/${it.slug}`}
                                 aria-label={it.name}
-                                className="absolute inset-0"
+                                className="absolute inset-0 z-10"
                               />
                             </div>
                             <div className="p-2.5">
