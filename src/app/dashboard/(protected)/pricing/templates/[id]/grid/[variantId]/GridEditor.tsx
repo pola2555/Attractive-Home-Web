@@ -36,6 +36,14 @@ export default function GridEditor({
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(saveGridCells, {});
 
+  // "Paste the supplier's table straight in" (walkthrough §5.1). The editor is
+  // looking at exactly the spreadsheet the grid below mirrors, so let them copy
+  // the numeric block and drop it in rather than retyping. Position-based: the
+  // paste maps onto the SAME rows and columns rendered here, top-left first.
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteMsg, setPasteMsg] = useState('');
+
   // The last axis becomes columns; everything before it becomes rows. That is
   // how the supplier laid the sheet out, and matching it means the editor can
   // read across rather than translate.
@@ -75,6 +83,41 @@ export default function GridEditor({
   const touched = allKeys.filter((k) => Object.hasOwn(cells, k)).length;
   const notEntered = allKeys.length - touched;
 
+  // Map a pasted spreadsheet block onto the grid by position: line -> row,
+  // tab-separated cell -> column, in the exact order shown above. A dash or an
+  // empty cell is the supplier's "not sold", so it saves as touched-but-blank
+  // (not left "not entered"). Numbers keep only their digits and point, so a
+  // "$1,050.00" pasted from a styled sheet still lands as 1050.00. Nothing is
+  // persisted until Save grid, so a wrong paste is just re-pasted or edited.
+  function applyPaste() {
+    const matrix = pasteText
+      .replace(/\r/g, '')
+      .replace(/\n+$/, '')
+      .split('\n')
+      .map((line) => line.split('\t'));
+    const updates: Record<string, string> = {};
+    rows.forEach((row, r) => {
+      const cols = matrix[r];
+      if (!cols) return;
+      columnAxis.values.forEach((column, c) => {
+        if (c >= cols.length) return;
+        const raw = (cols[c] ?? '').trim();
+        const key = keyFor(row, column.code);
+        if (raw === '' || raw === '—' || raw === '–' || raw === '-') updates[key] = '';
+        else updates[key] = raw.replace(/[^0-9.]/g, '');
+      });
+    });
+    const count = Object.keys(updates).length;
+    if (count === 0) {
+      setPasteMsg('Nothing recognised — copy just the numeric block (rows and columns) from the sheet.');
+      return;
+    }
+    setCells((prev) => ({ ...prev, ...updates }));
+    setPasteMsg(`Filled ${count} cell${count === 1 ? '' : 's'}. Check them against the sheet, then Save grid.`);
+    setPasteText('');
+    setPasteOpen(false);
+  }
+
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="templateId" value={templateId} />
@@ -86,6 +129,53 @@ export default function GridEditor({
         name="cellsJson"
         value={JSON.stringify(Object.fromEntries(allKeys.map((k) => [k, cells[k] ?? ''])))}
       />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setPasteOpen((v) => !v)}
+          className="text-sm px-3 py-1.5 rounded-lg border border-line-strong text-ink hover:border-accent/60"
+        >
+          {pasteOpen ? 'Close paste' : '⧉ Paste from Excel'}
+        </button>
+        {pasteMsg && <span className="text-xs text-accent">{pasteMsg}</span>}
+      </div>
+
+      {pasteOpen && (
+        <div className="border border-line rounded-lg p-3 bg-surface/40 space-y-2">
+          <p className="text-xs text-muted">
+            Copy the numeric block from the supplier&rsquo;s sheet — the same rows and columns shown
+            below, top-left first — and paste it here. A blank cell or a dash means &ldquo;not
+            sold&rdquo;.
+          </p>
+          <textarea
+            className="w-full h-28 px-3 py-2 bg-surface text-ink rounded border border-line-strong text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            placeholder={'65\t—\t—\n80\t80\t80'}
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={applyPaste}
+              className="px-3 py-1.5 rounded-lg bg-brand-brown hover:bg-brand-brown-hover text-ink text-sm"
+            >
+              Fill grid
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPasteText('');
+                setPasteMsg('');
+                setPasteOpen(false);
+              }}
+              className="px-3 py-1.5 rounded-lg text-muted hover:text-ink text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto border border-line rounded-lg">
         <table className="w-full text-sm">
