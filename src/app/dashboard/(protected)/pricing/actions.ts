@@ -298,8 +298,34 @@ export async function saveTemplateOption(_prev: FormState, fd: FormData): Promis
   if (existingOption) {
     await prisma.configTemplateOption.update({ where: { id: existingOption.id }, data });
   } else {
-    await prisma.configTemplateOption.create({
-      data: { id: uuidv7(), templateId, groupId, ...data },
+    // A freshly bound choice question starts by offering EVERY value its group
+    // defines, so it is answerable in the configurator the moment it is bound.
+    // Without this the option has no config_template_option_values rows at all
+    // and renders as an empty dropdown nobody can pick from — the values live in
+    // a join table with no fallback (see toTemplateDef in configuratorAdmin.ts).
+    // Mirrors saveVariantOption, where an empty submission already means "all".
+    // The editor can curate the set afterwards; number/boolean groups seed none.
+    const group = await prisma.optionGroup.findUnique({
+      where: { id: groupId },
+      include: { values: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } } },
+    });
+    const seedValues =
+      group && (group.inputKind === 'select' || group.inputKind === 'multi_select')
+        ? group.values
+        : [];
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.configTemplateOption.create({
+        data: { id: uuidv7(), templateId, groupId, ...data },
+      });
+      if (seedValues.length) {
+        await tx.configTemplateOptionValue.createMany({
+          data: seedValues.map((value, index) => ({
+            templateOptionId: created.id,
+            valueId: value.id,
+            sortOrder: index,
+          })),
+        });
+      }
     });
   }
 
