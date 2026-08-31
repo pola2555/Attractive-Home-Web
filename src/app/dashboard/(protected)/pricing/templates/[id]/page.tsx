@@ -7,6 +7,7 @@ import { getTemplate, listOptionGroups } from '@/lib/configuratorAdmin';
 import TemplateForm from '../TemplateForm';
 import TemplateOptionForm from './TemplateOptionForm';
 import VariantForm from './VariantForm';
+import VariantOptionForm from './VariantOptionForm';
 import UpgradeForm, { type UpgradeFormOption } from './UpgradeForm';
 import UpgradeExtras from './UpgradeExtras';
 import OptionValuesForm from './OptionValuesForm';
@@ -174,9 +175,10 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
       <section>
         <h2 className="text-lg font-semibold text-heading mb-1">Options</h2>
         <p className="text-muted text-sm mb-3">
-          Order is load-bearing: a condition or formula may only reference options <em>above</em>{' '}
-          it. That is what keeps the dependency tree acyclic instead of letting material and colour
-          gate each other.
+          Questions shared by every variant. Branch-only questions live under Base variants below.
+          Order is load-bearing: a condition or formula may only reference options <em>above</em> it.
+          That is what keeps the dependency tree acyclic instead of letting material and colour gate
+          each other.
         </p>
         <table className="w-full text-sm border-collapse mb-4">
           <thead>
@@ -192,7 +194,9 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
             </tr>
           </thead>
           <tbody>
-            {template.options.map((option) => {
+            {template.options
+              .filter((option) => option.variantCode === null)
+              .map((option) => {
               const meta = optionMeta.get(option.id);
               const curatable = meta?.inputKind === 'select' || meta?.inputKind === 'multi_select';
               return (
@@ -451,6 +455,93 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
         <div className="border border-line rounded-lg p-4 bg-surface/40">
           <VariantForm templateId={id} />
         </div>
+
+        {variantRows.length > 0 && (
+          <div className="mt-6 space-y-4" data-testid="branch-questions">
+            <div>
+              <h3 className="text-base font-semibold text-heading">Branch questions</h3>
+              <p className="text-muted text-sm">
+                Questions asked on one branch only — the aluminium frame asks thickness, the wood
+                frame asks grade. A new branch question offers every value its group defines; trim it
+                with &ldquo;Offered values&rdquo;.
+              </p>
+            </div>
+            {variantRows.map((variant) => {
+              const questions = template.options.filter((o) => o.variantCode === variant.code);
+              const nextOrder = template.options.reduce((m, o) => Math.max(m, o.sortOrder), -1) + 1;
+              return (
+                <div key={variant.id} className="border border-line rounded-lg p-4 bg-surface/40">
+                  <h4 className="font-medium text-heading mb-2">
+                    {variant.name}{' '}
+                    <span className="text-muted text-xs font-mono">{variant.code}</span>
+                  </h4>
+                  {questions.length > 0 ? (
+                    <table className="w-full text-sm border-collapse mb-3">
+                      <tbody>
+                        {questions.map((question) => {
+                          const meta = optionMeta.get(question.id);
+                          const curatable =
+                            meta?.inputKind === 'select' || meta?.inputKind === 'multi_select';
+                          return (
+                            <Fragment key={question.id}>
+                              <tr className={curatable ? '' : 'border-b border-line/50'}>
+                                <td className="py-1.5 pe-4 text-muted w-8">{question.sortOrder}</td>
+                                <td className="py-1.5 pe-4">
+                                  {question.groupCode}
+                                  <span className="text-muted text-xs"> · {question.inputKind}</span>
+                                </td>
+                                <td className="py-1.5 pe-4 text-xs text-muted">
+                                  {question.values.length === 0
+                                    ? '—'
+                                    : question.values.map((v) => v.code).join(', ')}
+                                </td>
+                                <td className="py-1.5 text-end">
+                                  <form action={removeTemplateOption}>
+                                    <input type="hidden" name="id" value={question.id} />
+                                    <button className="text-xs text-red-300 hover:underline">
+                                      Remove
+                                    </button>
+                                  </form>
+                                </td>
+                              </tr>
+                              {curatable && meta && (
+                                <tr className="border-b border-line/50">
+                                  <td colSpan={4} className="pb-3 ps-4">
+                                    <details>
+                                      <summary className="cursor-pointer text-xs text-accent select-none">
+                                        Offered values ({question.values.length})
+                                      </summary>
+                                      <OptionValuesForm
+                                        templateOptionId={question.id}
+                                        allValues={valuesByGroup.get(meta.groupId) ?? []}
+                                        offered={question.values.map((v) => ({
+                                          valueId: v.id,
+                                          condition: v.condition,
+                                        }))}
+                                      />
+                                    </details>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-muted text-xs mb-3">No branch-only questions yet.</p>
+                  )}
+                  <VariantOptionForm
+                    templateId={id}
+                    variantId={variant.id}
+                    groups={groups}
+                    nextOrder={nextOrder}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* ---- Upgrades ---------------------------------------------------- */}
