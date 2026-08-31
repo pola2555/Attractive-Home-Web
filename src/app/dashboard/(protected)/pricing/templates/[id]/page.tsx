@@ -9,6 +9,7 @@ import TemplateOptionForm from './TemplateOptionForm';
 import VariantForm from './VariantForm';
 import UpgradeForm, { type UpgradeFormOption } from './UpgradeForm';
 import UpgradeExtras from './UpgradeExtras';
+import OptionValuesForm from './OptionValuesForm';
 import BandForm from './BandForm';
 import DerivedQuantityForm from './DerivedQuantityForm';
 import PricingRuleForm from './PricingRuleForm';
@@ -47,9 +48,26 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
   const optionRows = await prisma.configTemplateOption.findMany({
     where: { templateId: id },
     orderBy: { sortOrder: 'asc' },
-    include: { group: { select: { code: true } } },
+    include: { group: { select: { code: true, inputKind: true } } },
   });
-  const optionIdByGroup = new Map(optionRows.map((o) => [o.group.code, o.id]));
+  // For the offered-values editor: input kind + group id per bound option (only
+  // choice questions have a value set to curate), and every value each of those
+  // groups defines, so the editor can tick a subset.
+  const optionMeta = new Map(
+    optionRows.map((o) => [o.id, { groupId: o.groupId, inputKind: o.group.inputKind }]),
+  );
+  const groupIds = [...new Set(optionRows.map((o) => o.groupId))];
+  const groupValueRows = await prisma.optionValue.findMany({
+    where: { groupId: { in: groupIds }, isActive: true },
+    orderBy: { sortOrder: 'asc' },
+    include: { translations: { where: { localeCode: 'en' } } },
+  });
+  const valuesByGroup = new Map<string, { id: string; code: string; name: string }[]>();
+  for (const value of groupValueRows) {
+    const list = valuesByGroup.get(value.groupId) ?? [];
+    list.push({ id: value.id, code: value.code, name: value.translations[0]?.name ?? value.code });
+    valuesByGroup.set(value.groupId, list);
+  }
 
   const constraints = await prisma.configTemplateConstraint.findMany({
     where: { templateId: id },
@@ -174,35 +192,56 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
             </tr>
           </thead>
           <tbody>
-            {template.options.map((option) => (
-              <tr key={option.id} className="border-b border-line/50 align-top">
-                <td className="py-2 pe-4 text-muted">{option.sortOrder}</td>
-                <td className="py-2 pe-4">{option.groupCode}</td>
-                <td className="py-2 pe-4 text-muted">{option.inputKind}</td>
-                <td className="py-2 pe-4 text-muted">{option.isRequired ? 'yes' : 'no'}</td>
-                <td className="py-2 pe-4 text-muted text-xs max-w-[16rem] break-all">
-                  {option.condition ? JSON.stringify(option.condition) : 'always'}
-                </td>
-                <td className="py-2 pe-4 text-muted text-xs max-w-[16rem] break-all">
-                  {option.ranges.length ? JSON.stringify(option.ranges) : '—'}
-                </td>
-                <td className="py-2 pe-4 text-xs">
-                  {option.values.length === 0
-                    ? '—'
-                    : option.values.map((v) => (v.condition ? `${v.code}*` : v.code)).join(', ')}
-                </td>
-                <td className="py-2 text-end">
-                  <form action={removeTemplateOption}>
-                    <input
-                      type="hidden"
-                      name="id"
-                      value={optionIdByGroup.get(option.groupCode) ?? ''}
-                    />
-                    <button className="text-xs text-red-300 hover:underline">Remove</button>
-                  </form>
-                </td>
-              </tr>
-            ))}
+            {template.options.map((option) => {
+              const meta = optionMeta.get(option.id);
+              const curatable = meta?.inputKind === 'select' || meta?.inputKind === 'multi_select';
+              return (
+                <Fragment key={option.id}>
+                  <tr className={`align-top ${curatable ? '' : 'border-b border-line/50'}`}>
+                    <td className="py-2 pe-4 text-muted">{option.sortOrder}</td>
+                    <td className="py-2 pe-4">{option.groupCode}</td>
+                    <td className="py-2 pe-4 text-muted">{option.inputKind}</td>
+                    <td className="py-2 pe-4 text-muted">{option.isRequired ? 'yes' : 'no'}</td>
+                    <td className="py-2 pe-4 text-muted text-xs max-w-[16rem] break-all">
+                      {option.condition ? JSON.stringify(option.condition) : 'always'}
+                    </td>
+                    <td className="py-2 pe-4 text-muted text-xs max-w-[16rem] break-all">
+                      {option.ranges.length ? JSON.stringify(option.ranges) : '—'}
+                    </td>
+                    <td className="py-2 pe-4 text-xs">
+                      {option.values.length === 0
+                        ? '—'
+                        : option.values.map((v) => (v.condition ? `${v.code}*` : v.code)).join(', ')}
+                    </td>
+                    <td className="py-2 text-end">
+                      <form action={removeTemplateOption}>
+                        <input type="hidden" name="id" value={option.id} />
+                        <button className="text-xs text-red-300 hover:underline">Remove</button>
+                      </form>
+                    </td>
+                  </tr>
+                  {curatable && meta && (
+                    <tr className="border-b border-line/50">
+                      <td colSpan={8} className="pb-4 ps-4">
+                        <details>
+                          <summary className="cursor-pointer text-xs text-accent select-none">
+                            Offered values ({option.values.length})
+                          </summary>
+                          <OptionValuesForm
+                            templateOptionId={option.id}
+                            allValues={valuesByGroup.get(meta.groupId) ?? []}
+                            offered={option.values.map((v) => ({
+                              valueId: v.id,
+                              condition: v.condition,
+                            }))}
+                          />
+                        </details>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
         <p className="text-muted text-xs mb-3">* value is gated by a condition.</p>
