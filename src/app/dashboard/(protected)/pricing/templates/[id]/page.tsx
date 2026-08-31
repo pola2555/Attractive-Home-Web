@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
@@ -7,6 +8,7 @@ import TemplateForm from '../TemplateForm';
 import TemplateOptionForm from './TemplateOptionForm';
 import VariantForm from './VariantForm';
 import UpgradeForm, { type UpgradeFormOption } from './UpgradeForm';
+import UpgradeExtras from './UpgradeExtras';
 import BandForm from './BandForm';
 import DerivedQuantityForm from './DerivedQuantityForm';
 import PricingRuleForm from './PricingRuleForm';
@@ -68,7 +70,11 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
     prisma.configUpgrade.findMany({
       where: { templateId: id },
       orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
-      include: { variant: { select: { name: true } }, tiers: true },
+      include: {
+        variant: { select: { name: true } },
+        tiers: { orderBy: { minQty: 'asc' } },
+        effects: { include: { templateOption: { include: { group: { select: { code: true } } } } } },
+      },
     }),
     prisma.configBand.findMany({
       where: { templateId: id },
@@ -99,6 +105,17 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
         ]),
     ).values(),
   ];
+
+  // An effect targets one specific bound question by id (unlike the availability
+  // condition, which names a group), so a group bound to two branches stays two
+  // distinct targets here rather than being deduplicated.
+  const effectTargets = template.options
+    .filter((option) => option.values.length > 0)
+    .map((option) => ({
+      id: option.id,
+      name: option.name,
+      values: option.values.map((v) => ({ code: v.code, name: v.name })),
+    }));
 
   // Bands hang off measurements, which are the only questions with a magnitude
   // to fall inside a range.
@@ -420,32 +437,58 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
             </thead>
             <tbody>
               {upgradeRows.map((upgrade) => (
-                <tr key={upgrade.id} className="border-b border-line/50 align-top">
-                  <td className="py-2 pe-4 text-muted text-xs">{upgrade.section ?? '—'}</td>
-                  <td className="py-2 pe-4">
-                    {upgrade.label}
-                    {upgrade.kind === 'accessory' && (
-                      <span className="text-accent text-xs"> accessory</span>
-                    )}
-                    {upgrade.tiers.length > 0 && (
-                      <span className="text-accent text-xs"> · {upgrade.tiers.length} tiers</span>
-                    )}
-                  </td>
-                  <td className="py-2 pe-4 text-muted text-xs">{upgrade.variant?.name ?? 'all'}</td>
-                  <td className="py-2 pe-4 text-end tabular-nums" dir="ltr">
-                    {upgrade.amount.toFixed(2)}
-                  </td>
-                  <td className="py-2 pe-4 text-muted text-xs">{upgrade.unit}</td>
-                  <td className="py-2 pe-4 text-muted text-xs max-w-[14rem]">
-                    {upgrade.unavailableNote ?? (upgrade.condition ? 'conditional' : 'always')}
-                  </td>
-                  <td className="py-2 text-end">
-                    <form action={removeUpgrade}>
-                      <input type="hidden" name="id" value={upgrade.id} />
-                      <button className="text-xs text-red-300 hover:underline">Delete</button>
-                    </form>
-                  </td>
-                </tr>
+                <Fragment key={upgrade.id}>
+                  <tr className="align-top">
+                    <td className="py-2 pe-4 text-muted text-xs">{upgrade.section ?? '—'}</td>
+                    <td className="py-2 pe-4">
+                      {upgrade.label}
+                      {upgrade.kind === 'accessory' && (
+                        <span className="text-accent text-xs"> accessory</span>
+                      )}
+                    </td>
+                    <td className="py-2 pe-4 text-muted text-xs">{upgrade.variant?.name ?? 'all'}</td>
+                    <td className="py-2 pe-4 text-end tabular-nums" dir="ltr">
+                      {upgrade.amount.toFixed(2)}
+                    </td>
+                    <td className="py-2 pe-4 text-muted text-xs">{upgrade.unit}</td>
+                    <td className="py-2 pe-4 text-muted text-xs max-w-[14rem]">
+                      {upgrade.unavailableNote ?? (upgrade.condition ? 'conditional' : 'always')}
+                    </td>
+                    <td className="py-2 text-end">
+                      <form action={removeUpgrade}>
+                        <input type="hidden" name="id" value={upgrade.id} />
+                        <button className="text-xs text-red-300 hover:underline">Delete</button>
+                      </form>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-line/50">
+                    <td colSpan={7} className="pb-4 ps-4">
+                      <details>
+                        <summary className="cursor-pointer text-xs text-accent select-none">
+                          Tiers &amp; effects ({upgrade.tiers.length}/{upgrade.effects.length})
+                        </summary>
+                        <UpgradeExtras
+                          upgradeId={upgrade.id}
+                          tiers={upgrade.tiers.map((tier) => ({
+                            id: tier.id,
+                            minQty: tier.minQty,
+                            unitAmount: tier.unitAmount.toNumber(),
+                          }))}
+                          effects={upgrade.effects.map((effect) => ({
+                            id: effect.id,
+                            kind: effect.kind,
+                            groupName: effect.templateOption?.group.code ?? null,
+                            valueCodes: Array.isArray(effect.valueCodes)
+                              ? effect.valueCodes.filter((v): v is string => typeof v === 'string')
+                              : [],
+                            message: effect.message,
+                          }))}
+                          targets={effectTargets}
+                        />
+                      </details>
+                    </td>
+                  </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -1055,6 +1055,29 @@ export async function saveUpgrade(_prev: FormState, fd: FormData): Promise<FormS
   let condition: Condition | null = null;
   if (whenGroup && whenValues.length) condition = { group: whenGroup, in: whenValues };
 
+  // An accessory can point at a real catalogue product, which is where its
+  // customs code and shipping weight come from. Editors type the SKU; resolving
+  // it to an id here means a later rename cannot silently break the link.
+  let productId: string | null = null;
+  const productCode = nullableStr(fd, 'productCode');
+  if (productCode) {
+    const product = await prisma.product.findFirst({
+      where: { code: productCode },
+      select: { id: true },
+    });
+    if (!product) return { error: `No product has the code "${productCode}".` };
+    productId = product.id;
+  }
+
+  // Quantity bounds for a countable upgrade, with the default kept inside them.
+  const minQty = Math.max(1, Number(str(fd, 'minQty') || '1') || 1);
+  const maxRaw = str(fd, 'maxQty');
+  const maxQty = maxRaw === '' ? null : Math.max(minQty, Number(maxRaw) || minQty);
+  const defaultQty = Math.min(
+    maxQty ?? Infinity,
+    Math.max(minQty, Number(str(fd, 'defaultQty') || '1') || 1),
+  );
+
   const existing = await prisma.configUpgrade.findFirst({
     where: { templateId, code },
     select: { id: true },
@@ -1069,7 +1092,10 @@ export async function saveUpgrade(_prev: FormState, fd: FormData): Promise<FormS
     amount,
     unit,
     quantityCode: nullableStr(fd, 'quantityCode'),
-    defaultQty: Number(str(fd, 'defaultQty') || '1') || 1,
+    productId,
+    defaultQty,
+    minQty,
+    maxQty,
     condition: (condition ?? undefined) as object | undefined,
     unavailableNote: nullableStr(fd, 'unavailableNote'),
     sortOrder: Number(str(fd, 'sortOrder') || '0') || 0,
@@ -1203,4 +1229,147 @@ export async function removeBand(fd: FormData): Promise<void> {
     diff: { code: { from: band.code, to: null } },
   });
   revalidatePath(`/dashboard/pricing/templates/${band.templateId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade quantity tiers and reach-back effects
+//
+// Both hang off an existing upgrade. Tiers are a quantity break — a pamphlet is
+// 30.00 for one, 15.00 each at 100 — and the engine takes the highest minQty at
+// or below the ordered quantity. An effect is an upgrade reaching back to change
+// another question, in one of three ways the engine already understands.
+// ---------------------------------------------------------------------------
+
+export async function saveUpgradeTier(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePermission('pricing.write');
+  const upgradeId = str(fd, 'upgradeId');
+  const upgrade = await prisma.configUpgrade.findUnique({
+    where: { id: upgradeId },
+    select: { id: true, templateId: true },
+  });
+  if (!upgrade) return { error: 'That upgrade no longer exists.' };
+
+  const minQty = Number(str(fd, 'minQty'));
+  if (!Number.isInteger(minQty) || minQty < 1) {
+    return { error: 'A tier needs a whole minimum quantity of 1 or more.' };
+  }
+  const unitAmount = Number(str(fd, 'unitAmount'));
+  if (!Number.isFinite(unitAmount) || unitAmount < 0) {
+    return { error: 'Enter the per-unit price at this tier.' };
+  }
+
+  await prisma.configUpgradeTier.upsert({
+    where: { upgradeId_minQty: { upgradeId, minQty } },
+    update: { unitAmount },
+    create: { id: uuidv7(), upgradeId, minQty, unitAmount },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_upgrade_tier',
+    entityId: `${upgradeId}:${minQty}`,
+    action: 'update',
+    diff: { unitAmount: { from: null, to: unitAmount } },
+  });
+
+  revalidatePath(`/dashboard/pricing/templates/${upgrade.templateId}`);
+  return { ok: true };
+}
+
+export async function deleteUpgradeTier(fd: FormData): Promise<void> {
+  const user = await requirePermission('pricing.write');
+  const id = str(fd, 'id');
+  const tier = await prisma.configUpgradeTier.findUnique({
+    where: { id },
+    include: { upgrade: { select: { templateId: true } } },
+  });
+  if (!tier) return;
+  await prisma.configUpgradeTier.delete({ where: { id } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_upgrade_tier',
+    entityId: id,
+    action: 'delete',
+  });
+  revalidatePath(`/dashboard/pricing/templates/${tier.upgrade.templateId}`);
+}
+
+const EFFECT_KINDS = ['restrict', 'set', 'note'] as const;
+
+export async function saveUpgradeEffect(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePermission('pricing.write');
+  const upgradeId = str(fd, 'upgradeId');
+  const upgrade = await prisma.configUpgrade.findUnique({
+    where: { id: upgradeId },
+    select: { id: true, templateId: true },
+  });
+  if (!upgrade) return { error: 'That upgrade no longer exists.' };
+
+  const kind = str(fd, 'kind');
+  if (!(EFFECT_KINDS as readonly string[]).includes(kind)) {
+    return { error: 'Choose what the effect does.' };
+  }
+
+  const message = nullableStr(fd, 'message');
+  const templateOptionId = nullableStr(fd, 'templateOptionId');
+  const valueCodes = fd.getAll('valueCodes').filter((v): v is string => typeof v === 'string');
+
+  if (kind === 'note') {
+    if (!message) return { error: 'A note needs the message to show the salesperson.' };
+  } else {
+    if (!templateOptionId) return { error: 'Choose the question this effect changes.' };
+    if (kind === 'set' && valueCodes.length !== 1) {
+      return { error: 'A "set" effect forces exactly one value.' };
+    }
+    if (kind === 'restrict' && valueCodes.length === 0) {
+      return { error: 'A "restrict" effect needs at least one value to keep selectable.' };
+    }
+    // The target must belong to this upgrade's own template.
+    const option = await prisma.configTemplateOption.findFirst({
+      where: { id: templateOptionId, templateId: upgrade.templateId },
+      select: { id: true },
+    });
+    if (!option) return { error: 'That question is not part of this template.' };
+  }
+
+  await prisma.configUpgradeEffect.create({
+    data: {
+      id: uuidv7(),
+      upgradeId,
+      kind,
+      templateOptionId: kind === 'note' ? null : templateOptionId,
+      // Codes, not ids, so the effect survives a value being recreated.
+      valueCodes: kind === 'note' ? undefined : (valueCodes as object),
+      message,
+    },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_upgrade_effect',
+    entityId: upgradeId,
+    action: 'create',
+    diff: { kind: { from: null, to: kind } },
+  });
+
+  revalidatePath(`/dashboard/pricing/templates/${upgrade.templateId}`);
+  return { ok: true };
+}
+
+export async function deleteUpgradeEffect(fd: FormData): Promise<void> {
+  const user = await requirePermission('pricing.write');
+  const id = str(fd, 'id');
+  const effect = await prisma.configUpgradeEffect.findUnique({
+    where: { id },
+    include: { upgrade: { select: { templateId: true } } },
+  });
+  if (!effect) return;
+  await prisma.configUpgradeEffect.delete({ where: { id } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_upgrade_effect',
+    entityId: id,
+    action: 'delete',
+  });
+  revalidatePath(`/dashboard/pricing/templates/${effect.upgrade.templateId}`);
 }

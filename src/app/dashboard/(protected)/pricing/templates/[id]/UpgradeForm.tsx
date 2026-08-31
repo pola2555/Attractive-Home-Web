@@ -33,6 +33,7 @@ export default function UpgradeForm({
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(saveUpgrade, {});
   const [unit, setUnit] = useState('flat');
+  const [kind, setKind] = useState('upgrade');
   const [whenGroup, setWhenGroup] = useState('');
 
   const whenValues = options.find((o) => o.groupCode === whenGroup)?.values ?? [];
@@ -136,12 +137,36 @@ export default function UpgradeForm({
           <label className={labelCls} htmlFor="u-kind">
             Kind
           </label>
-          <select id="u-kind" name="kind" className={inputCls}>
+          <select
+            id="u-kind"
+            name="kind"
+            className={inputCls}
+            value={kind}
+            onChange={(e) => setKind(e.target.value)}
+          >
             <option value="upgrade">Upgrade</option>
             <option value="accessory">Accessory</option>
           </select>
         </div>
       </div>
+
+      {kind === 'accessory' && (
+        <div>
+          <label className={labelCls} htmlFor="u-product">
+            Linked product SKU
+          </label>
+          <input
+            id="u-product"
+            name="productCode"
+            className={inputCls}
+            placeholder="Product code, e.g. BEN-LOCK-01"
+          />
+          <p className="text-muted text-xs mt-1">
+            Optional. Points this accessory at a real catalogue product, so its customs code and
+            shipping weight come from there instead of being restated here where they would drift.
+          </p>
+        </div>
+      )}
 
       {unit === 'per_sqm' && (
         <div>
@@ -164,18 +189,32 @@ export default function UpgradeForm({
       )}
 
       {(unit === 'per_unit' || unit === 'per_piece' || unit === 'per_set') && (
-        <div className="max-w-[200px]">
-          <label className={labelCls} htmlFor="u-qty-default">
-            Default quantity
-          </label>
-          <input
-            id="u-qty-default"
-            name="defaultQty"
-            type="number"
-            min={1}
-            defaultValue={1}
-            className={inputCls}
-          />
+        <div className="grid grid-cols-3 gap-3 max-w-[420px]">
+          <div>
+            <label className={labelCls} htmlFor="u-min">
+              Min qty
+            </label>
+            <input id="u-min" name="minQty" type="number" min={1} defaultValue={1} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="u-qty-default">
+              Default
+            </label>
+            <input
+              id="u-qty-default"
+              name="defaultQty"
+              type="number"
+              min={1}
+              defaultValue={1}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="u-max">
+              Max qty
+            </label>
+            <input id="u-max" name="maxQty" type="number" min={1} placeholder="none" className={inputCls} />
+          </div>
         </div>
       )}
 
