@@ -46,6 +46,7 @@ export default function ProductsTable({
   const [pending, start] = useTransition();
   const [bulkSource, setBulkSource] = useState('');
   const [bulkFeatured, setBulkFeatured] = useState('');
+  const [confirmDel, setConfirmDel] = useState(false);
 
   const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const toggleAll = () =>
@@ -72,7 +73,7 @@ export default function ProductsTable({
     });
 
   const deleteSelected = () => {
-    if (!window.confirm(`Delete ${selected.size} product(s)? This cannot be undone.`)) return;
+    setConfirmDel(false);
     runBulk(() => bulkDeleteProducts(ids()));
   };
 
@@ -110,9 +111,21 @@ export default function ProductsTable({
           </button>
 
           <span className="mx-1 h-5 w-px bg-line" />
-          <button type="button" disabled={pending} onClick={deleteSelected} className="rounded border border-red-500/50 px-2 py-1 text-red-300 hover:bg-red-500/10">
-            Delete
-          </button>
+          {confirmDel ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="text-xs text-red-300">Delete {selected.size}? This can&rsquo;t be undone.</span>
+              <button type="button" disabled={pending} onClick={deleteSelected} className="rounded border border-red-500/50 px-2 py-1 text-red-300 hover:bg-red-500/10">
+                Yes, delete
+              </button>
+              <button type="button" onClick={() => setConfirmDel(false)} className="rounded border border-line px-2 py-1 text-ink hover:border-accent/60">
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button type="button" disabled={pending} onClick={() => setConfirmDel(true)} className="rounded border border-red-500/50 px-2 py-1 text-red-300 hover:bg-red-500/10">
+              Delete
+            </button>
+          )}
           <button type="button" onClick={() => setSelected(new Set())} className="ms-auto text-muted hover:text-ink">
             Clear
           </button>

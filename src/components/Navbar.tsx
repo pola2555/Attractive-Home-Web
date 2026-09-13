@@ -42,6 +42,8 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
   // Client-side auth flag (hydrates after mount, so the page stays static).
   const { authed } = useFavorites();
   // Staff-session check (also client-side) → controls the Dashboard link.
+  // Re-checked on every route change so a sign-in/out (which redirects, a soft
+  // navigation) flips this link without a manual reload.
   const [canDashboard, setCanDashboard] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -54,7 +56,7 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
     return () => {
       alive = false;
     };
-  }, []);
+  }, [pathname]);
 
   const isCatalog = pathname.startsWith(`/${locale}/catalog`);
   const isCatalogRef = useRef(isCatalog);

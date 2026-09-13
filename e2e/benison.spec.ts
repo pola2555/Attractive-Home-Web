@@ -39,8 +39,12 @@ test('the editor shows the fork, its grids, its upgrades and its bands', async (
   // Both branches, each with its own grid. Scoped to the variants table: the
   // variant name also appears in the upgrades table's "applies to" column.
   const variants = page.getByTestId('variants');
-  await expect(variants.getByText('Aluminum Frame + WPC Connecting Board')).toBeVisible();
-  await expect(variants.getByText('Wood Frame')).toBeVisible();
+  // The variant name appears both as a table cell and as a per-variant grid
+  // heading in this region — scope to the row cell so the match is unambiguous.
+  await expect(
+    variants.getByRole('cell', { name: 'Aluminum Frame + WPC Connecting Board' }),
+  ).toBeVisible();
+  await expect(variants.getByRole('cell', { name: 'Wood Frame' })).toBeVisible();
 
   // The counter that separates a supplier refusal from an unfilled cell.
   await expect(variants.getByRole('link', { name: '11 priced · 4 not sold' })).toBeVisible();

@@ -103,6 +103,13 @@ const templateInclude = {
           cells: true,
         },
       },
+      // The decision-tree base price; the engine works in codes. Only base nodes
+      // (addonId = null) — add-on trees are priced separately, not as the base.
+      priceNodes: {
+        where: { addonId: null },
+        orderBy: { sortOrder: 'asc' },
+        include: { group: { select: { code: true } }, value: { select: { code: true } } },
+      },
     },
   },
   upgrades: {
@@ -208,6 +215,14 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
             ),
           }
         : null,
+      priceTree: variant.priceNodes.map((n) => ({
+        id: n.id,
+        parentId: n.parentId,
+        groupCode: n.group.code,
+        valueCode: n.value.code,
+        amount: num(n.amount),
+        sortOrder: n.sortOrder,
+      })),
     })),
 
     upgrades: row.upgrades.map((upgrade) => ({

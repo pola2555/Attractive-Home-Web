@@ -24,6 +24,7 @@
     "@prisma/client": "^6.19.3",
     "@tailwindcss/postcss": "^4.3.3",
     "argon2": "^0.45.1",
+    "dagre": "^0.8.5",
     "dotenv": "^17.4.2",
     "hls.js": "^1.6.16",
     "leaflet": "^1.9.4",
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "@types/dagre": "^0.7.54",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",

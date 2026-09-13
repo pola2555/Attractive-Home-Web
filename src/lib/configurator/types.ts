@@ -180,6 +180,20 @@ export type PriceGridDef = {
   cells: Record<string, number | null>;
 };
 
+// A base-price DECISION TREE — the free-form alternative to the cartesian grid.
+// Each branch may ask different questions and stop at a different depth, which a
+// grid (fixed axes) cannot express. A flat list; the engine rebuilds the tree
+// from parentId. Siblings share `groupCode` (the question at that level). A LEAF
+// (no children) carries `amount`; null on a leaf is "not sold".
+export type PriceTreeNodeDef = {
+  id: string;
+  parentId: string | null;
+  groupCode: string;
+  valueCode: string;
+  amount: number | null;
+  sortOrder: number;
+};
+
 export type VariantDef = {
   id: string;
   code: string;
@@ -189,6 +203,8 @@ export type VariantDef = {
   imageUrl: string | null;
   sortOrder: number;
   grid: PriceGridDef | null;
+  /** When present (non-empty), the base price comes from this tree, not `grid`. */
+  priceTree?: PriceTreeNodeDef[];
 };
 
 export const UPGRADE_UNITS = ['flat', 'per_unit', 'per_set', 'per_sqm', 'per_piece'] as const;

@@ -1,4 +1,5 @@
 import { lookupGrid, selectedVariantCode, variantByCode, withVariant } from './grid';
+import { lookupPriceTree } from './tree';
 import { priceConfiguration, type PriceResult, type PriceSeed, type PriceSeedLine } from './price';
 import { computeDerived } from './resolve';
 import {
@@ -56,7 +57,12 @@ export function priceProduct(input: PriceProductInput): ProductPriceResult {
 
   const variantCode = selectedVariantCode(selection);
   const variant = variantByCode(template.variants ?? [], variantCode);
-  const grid = lookupGrid(variant?.grid ?? null, selection);
+  // A variant priced by a decision tree uses it for the base; otherwise the
+  // cartesian grid. Both return the same GridLookup, so the rest is identical.
+  const grid =
+    variant?.priceTree && variant.priceTree.length > 0
+      ? lookupPriceTree(variant.priceTree, selection, variant.grid?.currency ?? template.currency)
+      : lookupGrid(variant?.grid ?? null, selection);
 
   const { derived } = computeDerived(template, selection);
 

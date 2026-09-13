@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
+import { prisma } from '@/lib/prisma';
 import { requireUser, effectivePermissions } from '@/lib/permissions';
 import { getFacetOptions, getProductForEdit } from '@/lib/catalogAdmin';
 import ProductForm from '../../ProductForm';
@@ -12,9 +13,14 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   const permissions = await effectivePermissions(user.id);
   if (!permissions.has('catalog.read')) redirect('/dashboard');
   const canWrite = permissions.has('catalog.write');
+  const canPrice = permissions.has('pricing.write');
 
   const { id } = await params;
-  const [facets, initial] = await Promise.all([getFacetOptions(), getProductForEdit(id)]);
+  const [facets, initial, cfg] = await Promise.all([
+    getFacetOptions(),
+    getProductForEdit(id),
+    prisma.product.findUnique({ where: { id }, select: { templateId: true } }),
+  ]);
   if (!initial) notFound();
 
   return (
@@ -33,7 +39,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           />
         )}
       </div>
-      <p className="text-muted text-sm mb-8">
+      <p className="text-muted text-sm mb-4">
         {initial.legacyId} ·{' '}
         <a
           href={`/en/products/${initial.slug}`}
@@ -44,6 +50,15 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           View live ↗
         </a>
       </p>
+
+      {cfg?.templateId && canPrice && (
+        <Link
+          href={`/dashboard/products/${id}/tree`}
+          className="inline-flex items-center gap-2 rounded-lg border border-accent/60 bg-accent-2/10 px-4 py-2 text-sm text-heading hover:border-accent mb-8"
+        >
+          🌳 Configurable product — open the tree canvas →
+        </Link>
+      )}
 
       {canWrite ? (
         <ProductForm

@@ -247,6 +247,379 @@ export async function createProduct(
 }
 
 // ---------------------------------------------------------------------------
+// Create — tree product (configurable, priced by the configurator)
+// ---------------------------------------------------------------------------
+
+// A configurator template/variant code: lowercase letters, digits and
+// underscores, starting with a letter (matches codeSchema in the pricing
+// actions, so a tree product's template is editable there too).
+function toConfigCode(input: string): string {
+  let c = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 50);
+  if (!c) c = 'product';
+  if (!/^[a-z]/.test(c)) c = `p_${c}`.slice(0, 50);
+  return c;
+}
+
+async function uniqueTemplateCode(base: string): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = attempt === 0 ? base : `${base}_${uuidv7().slice(0, 4)}`.slice(0, 60);
+    const clash = await prisma.configTemplate.findUnique({ where: { code }, select: { id: true } });
+    if (!clash) return code;
+  }
+  return `${base}_${uuidv7().slice(0, 8)}`.slice(0, 60);
+}
+
+// Copy a nullable JSONB column verbatim: SQL NULL stays SQL NULL (DbNull), any
+// stored value passes straight through. Prisma refuses a bare `null` here.
+function jsonIn(
+  v: Prisma.JsonValue | null,
+): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput {
+  return v === null ? Prisma.DbNull : (v as Prisma.InputJsonValue);
+}
+
+// Deep-copy a configurator template so a new tree product can start from an
+// existing one instead of a blank canvas. Option groups/values are the SHARED
+// vocabulary (globally coded) and are reused, never duplicated — only the
+// template-scoped rows are copied, with fresh ids and an old->new map so every
+// cross-reference (grid axis -> option, band -> option, effect -> option,
+// upgrade -> variant) is rewired to the copy.
+async function cloneConfigTemplate(
+  tx: Prisma.TransactionClient,
+  sourceTemplateId: string,
+  newTemplateId: string,
+  name: string,
+  code: string,
+): Promise<void> {
+  const src = await tx.configTemplate.findUnique({
+    where: { id: sourceTemplateId },
+    include: {
+      variants: { include: { grid: { include: { axes: true, cells: true } } } },
+      options: { include: { values: true } },
+      upgrades: { include: { tiers: true, effects: true } },
+      bands: true,
+      pricingRules: true,
+      constraints: true,
+      derivedQuantities: true,
+    },
+  });
+  if (!src) throw new Error('The product to copy no longer exists.');
+
+  await tx.configTemplate.create({
+    data: {
+      id: newTemplateId,
+      code,
+      name,
+      currency: src.currency,
+      hsCodeId: src.hsCodeId,
+      standardNote: src.standardNote,
+      isActive: true,
+    },
+  });
+
+  const variantMap = new Map<string, string>();
+  const gridMap = new Map<string, string>();
+  for (const v of src.variants) {
+    const nv = uuidv7();
+    variantMap.set(v.id, nv);
+    await tx.configVariant.create({
+      data: {
+        id: nv,
+        templateId: newTemplateId,
+        code: v.code,
+        name: v.name,
+        includedSpec: v.includedSpec,
+        imageUrl: v.imageUrl,
+        sortOrder: v.sortOrder,
+        isActive: v.isActive,
+      },
+    });
+    if (v.grid) {
+      const ng = uuidv7();
+      gridMap.set(v.grid.id, ng);
+      await tx.configPriceGrid.create({
+        data: { id: ng, variantId: nv, currency: v.grid.currency, note: v.grid.note },
+      });
+    }
+  }
+
+  const optionMap = new Map<string, string>();
+  for (const o of src.options) {
+    const no = uuidv7();
+    optionMap.set(o.id, no);
+    await tx.configTemplateOption.create({
+      data: {
+        id: no,
+        templateId: newTemplateId,
+        groupId: o.groupId,
+        variantId: o.variantId ? (variantMap.get(o.variantId) ?? null) : null,
+        configText: o.configText,
+        sortOrder: o.sortOrder,
+        isRequired: o.isRequired,
+        defaultValueId: o.defaultValueId,
+        condition: jsonIn(o.condition),
+        ranges: jsonIn(o.ranges),
+      },
+    });
+    for (const join of o.values) {
+      await tx.configTemplateOptionValue.create({
+        data: {
+          templateOptionId: no,
+          valueId: join.valueId,
+          sortOrder: join.sortOrder,
+          condition: jsonIn(join.condition),
+          configText: join.configText,
+          imageUrl: join.imageUrl,
+        },
+      });
+    }
+  }
+
+  for (const v of src.variants) {
+    if (!v.grid) continue;
+    const ng = gridMap.get(v.grid.id);
+    if (!ng) continue;
+    for (const ax of v.grid.axes) {
+      const mapped = optionMap.get(ax.templateOptionId);
+      if (!mapped) continue;
+      await tx.configPriceGridAxis.create({
+        data: { id: uuidv7(), gridId: ng, templateOptionId: mapped, position: ax.position },
+      });
+    }
+    for (const cell of v.grid.cells) {
+      await tx.configPriceCell.create({
+        data: {
+          id: uuidv7(),
+          gridId: ng,
+          key: cell.key,
+          coords: cell.coords as Prisma.InputJsonValue,
+          amount: cell.amount,
+          note: cell.note,
+        },
+      });
+    }
+  }
+
+  for (const u of src.upgrades) {
+    const nu = uuidv7();
+    await tx.configUpgrade.create({
+      data: {
+        id: nu,
+        templateId: newTemplateId,
+        variantId: u.variantId ? (variantMap.get(u.variantId) ?? null) : null,
+        section: u.section,
+        code: u.code,
+        label: u.label,
+        detail: u.detail,
+        kind: u.kind,
+        amount: u.amount,
+        unit: u.unit,
+        quantityCode: u.quantityCode,
+        defaultQty: u.defaultQty,
+        minQty: u.minQty,
+        maxQty: u.maxQty,
+        productId: u.productId,
+        condition: jsonIn(u.condition),
+        unavailableNote: u.unavailableNote,
+        sortOrder: u.sortOrder,
+        isActive: u.isActive,
+      },
+    });
+    for (const t of u.tiers) {
+      await tx.configUpgradeTier.create({
+        data: { id: uuidv7(), upgradeId: nu, minQty: t.minQty, unitAmount: t.unitAmount },
+      });
+    }
+    for (const e of u.effects) {
+      await tx.configUpgradeEffect.create({
+        data: {
+          id: uuidv7(),
+          upgradeId: nu,
+          kind: e.kind,
+          templateOptionId: e.templateOptionId
+            ? (optionMap.get(e.templateOptionId) ?? null)
+            : null,
+          valueCodes: jsonIn(e.valueCodes),
+          message: e.message,
+        },
+      });
+    }
+  }
+
+  for (const b of src.bands) {
+    const mappedOption = optionMap.get(b.templateOptionId);
+    if (!mappedOption) continue;
+    await tx.configBand.create({
+      data: {
+        id: uuidv7(),
+        templateId: newTemplateId,
+        variantId: b.variantId ? (variantMap.get(b.variantId) ?? null) : null,
+        templateOptionId: mappedOption,
+        code: b.code,
+        label: b.label,
+        minValue: b.minValue,
+        maxValue: b.maxValue,
+        amount: b.amount,
+        sortOrder: b.sortOrder,
+        isActive: b.isActive,
+      },
+    });
+  }
+
+  for (const r of src.pricingRules) {
+    if (!r.templateId) continue; // product-scoped rules stay with the old product
+    await tx.pricingRule.create({
+      data: {
+        id: uuidv7(),
+        templateId: newTemplateId,
+        code: r.code,
+        condition: jsonIn(r.condition),
+        stage: r.stage,
+        priority: r.priority,
+        basis: r.basis,
+        quantityCode: r.quantityCode,
+        applyPer: r.applyPer,
+        amount: r.amount,
+        rate: r.rate,
+        currency: r.currency,
+        note: r.note,
+        isActive: r.isActive,
+      },
+    });
+  }
+
+  for (const c of src.constraints) {
+    await tx.configTemplateConstraint.create({
+      data: {
+        id: uuidv7(),
+        templateId: newTemplateId,
+        code: c.code,
+        kind: c.kind,
+        condition: c.condition as Prisma.InputJsonValue,
+        message: c.message,
+        isActive: c.isActive,
+      },
+    });
+  }
+
+  for (const d of src.derivedQuantities) {
+    await tx.configDerivedQuantity.create({
+      data: {
+        id: uuidv7(),
+        templateId: newTemplateId,
+        code: d.code,
+        formula: d.formula,
+        unit: d.unit,
+        sortOrder: d.sortOrder,
+      },
+    });
+  }
+}
+
+const treeProductSchema = z.object({
+  name: z.string().trim().min(1, 'Give the product a name.').max(200),
+  sourceId: z.string().uuid('Choose a supplier.'),
+});
+
+// A "tree product" is a made-to-order product priced by the configurator. Instead
+// of the flat ProductForm it starts almost empty — a name, a supplier, and its own
+// config template with one build — then opens on the tree canvas, where the
+// questions, prices and upgrades get authored. Everything the canvas writes lands
+// in the existing configurator tables; this only lays the first stones.
+export async function createTreeProduct(
+  _prev: ProductFormState,
+  formData: FormData,
+): Promise<ProductFormState> {
+  const user = await requirePermission('pricing.write');
+  const parsed = treeProductSchema.safeParse({
+    name: str(formData, 'name'),
+    sourceId: str(formData, 'sourceId'),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { name, sourceId } = parsed.data;
+
+  // Optional: start by copying an existing tree product instead of from scratch.
+  const sourceProductId = str(formData, 'sourceProductId') || null;
+  let sourceTemplateId: string | null = null;
+  if (sourceProductId) {
+    const srcProd = await prisma.product.findUnique({
+      where: { id: sourceProductId },
+      select: { templateId: true, kind: true },
+    });
+    if (!srcProd?.templateId || srcProd.kind !== 'made_to_order') {
+      return { error: 'That product cannot be copied.' };
+    }
+    sourceTemplateId = srcProd.templateId;
+  }
+
+  const id = uuidv7();
+  const templateId = uuidv7();
+  const code = await uniqueTemplateCode(toConfigCode(str(formData, 'code') || name));
+  const slug = await uniqueSlug(slugify(name) || code || id);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (sourceTemplateId) {
+        // Deep-copy the source's whole tree into a brand-new template.
+        await cloneConfigTemplate(tx, sourceTemplateId, templateId, name, code);
+      } else {
+        await tx.configTemplate.create({
+          data: { id: templateId, code, name, currency: 'USD', isActive: true },
+        });
+        // One empty build so the canvas has something to hang the tree on; its
+        // grid comes with it, the same convention the variant editor uses.
+        const variantId = uuidv7();
+        await tx.configVariant.create({
+          data: { id: variantId, templateId, code: 'build_1', name: 'Build 1', sortOrder: 0 },
+        });
+        await tx.configPriceGrid.create({ data: { id: uuidv7(), variantId, currency: 'USD' } });
+      }
+      // Made-to-order: no legacy_id (the CHECK only demands it for 'stock'), the
+      // flat price stays 0 because the configurator prices it, and it starts
+      // unpublished so a half-built door never shows in the catalog.
+      await tx.product.create({
+        data: {
+          id,
+          kind: 'made_to_order',
+          slug,
+          sourceId,
+          price: 0,
+          currency: 'AED',
+          isPublished: false,
+          isAvailable: true,
+          templateId,
+        },
+      });
+      await tx.productTranslation.create({
+        data: { id: uuidv7(), productId: id, localeCode: 'en', name },
+      });
+    });
+  } catch (err) {
+    return { error: writeErrorMessage(err) };
+  }
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: id,
+    action: 'create',
+    diff: { kind: { from: null, to: 'made_to_order (tree)' }, name: { from: null, to: name } },
+  });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_template',
+    entityId: templateId,
+    action: 'create',
+    diff: { code: { from: null, to: code } },
+  });
+  revalidatePath('/dashboard/products');
+  redirect(`/dashboard/products/${id}/tree`);
+}
+
+// ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------
 

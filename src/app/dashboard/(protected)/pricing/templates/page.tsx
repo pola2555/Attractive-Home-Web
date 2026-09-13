@@ -33,6 +33,18 @@ export default async function TemplatesPage() {
         </p>
       </div>
 
+      <div className="rounded-lg border border-line bg-surface/40 p-4 text-sm">
+        <p className="text-ink">
+          <b className="text-heading">This is the advanced editor.</b> Most configurable products are
+          now built visually from{' '}
+          <Link href="/dashboard/products/new?type=tree" className="text-accent hover:underline">
+            Products → New → Tree product
+          </Link>
+          , which opens a canvas. Use this screen for power features the canvas doesn&rsquo;t cover
+          yet — conditions, reach-back effects, quantity tiers, derived quantities and pricing rules.
+        </p>
+      </div>
+
       {templates.length === 0 ? (
         <p className="text-muted text-sm">No templates yet.</p>
       ) : (

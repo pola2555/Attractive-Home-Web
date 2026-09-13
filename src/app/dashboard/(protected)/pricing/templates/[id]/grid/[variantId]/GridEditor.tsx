@@ -26,6 +26,7 @@ export default function GridEditor({
   axes,
   initialCells,
   currency,
+  saveAction = saveGridCells,
 }: {
   templateId: string;
   variantId: string;
@@ -33,8 +34,12 @@ export default function GridEditor({
   /** Key -> stored value. `null` means the editor marked it not sold. */
   initialCells: Record<string, number | null>;
   currency: string;
+  /** Which server action persists the grid. Defaults to the standalone page's
+      `saveGridCells`; the tree canvas passes a tree-scoped one that also
+      revalidates the map. Same contract: reads templateId/variantId/cellsJson. */
+  saveAction?: (prev: FormState, fd: FormData) => Promise<FormState>;
 }) {
-  const [state, formAction, pending] = useActionState<FormState, FormData>(saveGridCells, {});
+  const [state, formAction, pending] = useActionState<FormState, FormData>(saveAction, {});
 
   // "Paste the supplier's table straight in" (walkthrough §5.1). The editor is
   // looking at exactly the spreadsheet the grid below mirrors, so let them copy

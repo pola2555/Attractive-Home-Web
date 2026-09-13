@@ -108,6 +108,7 @@ function Row({
   const [names, setNames] = useState<Record<Locale, string>>({ ...value.names });
   const [hex, setHex] = useState(value.hex ?? '#000000');
   const [expanded, setExpanded] = useState(false);
+  const [armed, setArmed] = useState(false);
 
   const dirty =
     canWrite &&
@@ -147,7 +148,7 @@ function Row({
   };
 
   const remove = () => {
-    if (!window.confirm(`Delete "${value.code}"? Products using it keep working (the link is cleared).`)) return;
+    setArmed(false);
     run(() => deleteFacetInline(facet, value.id));
   };
 
@@ -232,9 +233,21 @@ function Row({
                   </button>
                 </>
               ) : (
-                <button type="button" disabled={pending} onClick={remove} aria-label="Delete" className="text-red-300 hover:text-red-200 text-sm">
-                  Delete
-                </button>
+                armed ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="text-xs text-muted">Delete? The link is cleared.</span>
+                    <button type="button" disabled={pending} onClick={remove} className="text-red-300 hover:text-red-200 text-sm">
+                      Confirm
+                    </button>
+                    <button type="button" onClick={() => setArmed(false)} className="text-muted hover:text-ink text-sm">
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button type="button" disabled={pending} onClick={() => setArmed(true)} aria-label="Delete" className="text-red-300 hover:text-red-200 text-sm">
+                    Delete
+                  </button>
+                )
               )}
             </div>
           </td>

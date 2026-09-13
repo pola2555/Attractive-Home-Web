@@ -22,10 +22,10 @@ const BLOCKS: BlockSeed[] = [
     key: 'home.subtitle',
     notes: 'Hero subtitle on the home page',
     translations: {
-      en: 'Interior Design and Fit-Out',
-      ar: 'التصميم الداخلي والتشطيبات',
-      fr: "Design d'intérieur et aménagement",
-      ru: 'Дизайн интерьера и отделка',
+      en: 'Luxury Interior Design and Fit-Out Company in Dubai',
+      ar: 'شركة التصميم الداخلي والتشطيبات الفاخرة في دبي',
+      fr: "Entreprise de design d'intérieur et d'aménagement de luxe à Dubaï",
+      ru: 'Компания элитного дизайна интерьера и отделки в Дубае',
     },
   },
   {

@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { usePathname } from 'next/navigation';
 import { toggleFavorite, mergeFavorites } from './actions';
 
 // Client store for a logged-in customer's server favorites. It hydrates itself
@@ -27,11 +28,17 @@ export default function FavoritesProvider({ children }: { children: React.ReactN
   const [authed, setAuthed] = useState(false);
   const [ids, setIds] = useState<Set<string>>(() => new Set());
   const [, startTransition] = useTransition();
-  const started = useRef(false);
+  const pathname = usePathname();
+  const probedPath = useRef<string | null>(null);
 
+  // Re-check the session whenever the route changes. Signing in or out ends in a
+  // redirect (a soft client navigation that keeps this provider mounted), so a
+  // once-on-mount fetch would leave the ♥ cards and navbar stale until a manual
+  // reload. The ref keeps this to one fetch per distinct path (and dodges the
+  // double-invoke of dev strict mode).
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+    if (probedPath.current === pathname) return;
+    probedPath.current = pathname;
     void (async () => {
       let data: { authed: boolean; ids: string[] } = { authed: false, ids: [] };
       try {
@@ -58,7 +65,7 @@ export default function FavoritesProvider({ children }: { children: React.ReactN
       setAuthed(data.authed);
       setIds(set);
     })();
-  }, []);
+  }, [pathname]);
 
   const has = (id: string) => ids.has(id);
   // Stable array reference (only changes when the set changes) so consumers can

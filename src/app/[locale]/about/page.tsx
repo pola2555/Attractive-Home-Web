@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isLocale, type Locale } from '@/i18n/config';
@@ -12,6 +13,28 @@ import VideoPlayer from '@/components/VideoPlayer';
 import LeafletMap, { type MapMarker } from '@/components/LeafletMap';
 
 export const revalidate = 3600;
+
+// Set the brand name in a heavier weight wherever it appears in a marketing
+// string. The stored copy stays plain text; every locale's seed spells the
+// name "Attractive Home", so one split covers them all.
+function emphasizeBrand(text: string | undefined): ReactNode {
+  if (!text) return text ?? null;
+  const brand = 'Attractive Home';
+  const parts = text.split(brand);
+  if (parts.length === 1) return text;
+  const out: ReactNode[] = [];
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      out.push(
+        <span key={`brand-${i}`} className="font-semibold">
+          {brand}
+        </span>,
+      );
+    }
+    out.push(part);
+  });
+  return out;
+}
 
 export async function generateMetadata({
   params,
@@ -83,9 +106,11 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
               <div className="mt-4 w-16 h-0.5 rounded-full bg-accent-2/80" aria-hidden="true" />
             </div>
 
-            {/* Marketing copy from content_blocks — admin-editable in the DB. */}
+            {/* Marketing copy from content_blocks — admin-editable in the DB.
+                The brand name is emphasised in place; the stored copy stays plain
+                text, so every locale's "Attractive Home" reads as one word set. */}
             <p className="text-lg sm:text-xl md:text-2xl leading-relaxed text-on-media/95 max-w-3xl">
-              {blocks['about.intro']}
+              {emphasizeBrand(blocks['about.intro'])}
             </p>
 
             <div className="flex flex-wrap gap-x-8 gap-y-2 pt-2 border-t border-on-media/20">

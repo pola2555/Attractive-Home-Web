@@ -43,6 +43,7 @@ model OptionGroup {
   translations    OptionGroupTranslation[]
   values          OptionValue[]
   templateOptions ConfigTemplateOption[]
+  priceNodes      ConfigPriceNode[]
 
   @@map("option_groups")
 }
@@ -101,6 +102,7 @@ model OptionValue {
   translations     OptionValueTranslation[]
   templateValues   ConfigTemplateOptionValue[]
   defaultForOption ConfigTemplateOption[]
+  priceNodes       ConfigPriceNode[]
 
   @@unique([groupId, code])
   @@index([colorId])
@@ -417,10 +419,12 @@ model ConfigVariant {
 
   template ConfigTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
-  options  ConfigTemplateOption[]
-  grid     ConfigPriceGrid?
-  upgrades ConfigUpgrade[]
-  bands    ConfigBand[]
+  options    ConfigTemplateOption[]
+  grid       ConfigPriceGrid?
+  upgrades   ConfigUpgrade[]
+  bands      ConfigBand[]
+  priceNodes ConfigPriceNode[]
+  addons     ConfigAddon[]
 
   @@unique([templateId, code])
   @@index([templateId, sortOrder])
@@ -493,6 +497,175 @@ model ConfigPriceCell {
 
   @@unique([gridId, key])
   @@map("config_price_cells")
+}
+
+// A base-price DECISION TREE — the free-form alternative to the cartesian grid.
+//
+// The grid needs every branch to ask the SAME questions in the same order; this
+// does not. Each branch can ask different questions and stop at a different
+// depth: Thickness -> Edge banding -> Board, where 55 mm offers no PUR branch
+// and one branch may ask a question a sibling never does. The nodes under one
+// parent all answer the same question (the parent's "next question"), so the
+// tree stays a clean decision tree rather than an arbitrary graph. A LEAF (no
+// children) carries the price; a NULL amount on a leaf is the supplier's dash —
+// "not sold" — exactly as in the grid. A variant is priced by its tree when it
+// has one, and falls back to its grid otherwise.
+// A named add-on for a variant: its own base-style decision tree (its nodes are
+// ConfigPriceNode rows with addonId set), attached to one or more base branches.
+// The add-on is offered only for the base configurations it is attached to, and
+// its chosen leaf price ADDS on top of the base — the base tree sets the price,
+// an add-on adds to it.
+model ConfigAddon {
+  id        String @id @db.Uuid
+  variantId String @map("variant_id") @db.Uuid
+  name      String
+
+  // A COLOUR NODE is an add-on that also carries exactly one colour: same price,
+  // notes, options and attach-anywhere behaviour, plus a swatch. The colour is
+  // authored freely here (a custom name + hex) rather than drawn from the shared
+  // colour library, so a per-product bespoke finish needs no vocabulary row.
+  // Both NULL = an ordinary add-on; a hex present = a colour node.
+  colorName String? @map("color_name")
+  colorHex  String? @map("color_hex")
+
+  // The add-on's own price (optional). A flat add-on needs only this; when it
+  // also has options, the option refines it the same way a base branch does.
+  amount Decimal? @db.Decimal(12, 2)
+
+  // How that price is charged: null = a one-off/flat amount; otherwise a unit
+  // code ('per_unit', 'per_sqm', 'per_item', …) from the growable price-unit list.
+  priceUnit String? @map("price_unit")
+
+  // Attached to the WHOLE base price (every configuration of this variant),
+  // rather than — or as well as — specific branches in `attachments`. This is
+  // the "connect to the Base price box" anchor; a specific-branch attachment is
+  // still a ConfigAddonAttachment row.
+  attachBase Boolean @default(false) @map("attach_base")
+
+  // Optional staff notes, like a branch's.
+  description   String?
+  configuration String?
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  variant     ConfigVariant           @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  nodes       ConfigPriceNode[]        @relation("AddonNodes")
+  attachments ConfigAddonAttachment[]
+
+  // Add-on → add-on links (this add-on applies to those add-ons, and vice versa).
+  linksFrom ConfigAddonLink[] @relation("AddonLinkFrom")
+  linksTo   ConfigAddonLink[] @relation("AddonLinkTo")
+
+  @@index([variantId])
+  @@map("config_addons")
+}
+
+// Attaches one add-on to the WHOLE of another add-on — the header-to-header
+// version of a ConfigAddonAttachment (which anchors to a single node). "add-on B
+// applies to add-on A" is addonId = B, targetAddonId = A. Same-variant only, and
+// an add-on never links to itself. Authoring metadata for now, like the rest of
+// the add-on attachments (the base-price engine does not read it yet).
+model ConfigAddonLink {
+  id            String @id @db.Uuid
+  addonId       String @map("addon_id") @db.Uuid
+  targetAddonId String @map("target_addon_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  addon       ConfigAddon @relation("AddonLinkFrom", fields: [addonId], references: [id], onDelete: Cascade)
+  targetAddon ConfigAddon @relation("AddonLinkTo", fields: [targetAddonId], references: [id], onDelete: Cascade)
+
+  @@unique([addonId, targetAddonId])
+  @@index([targetAddonId])
+  @@map("config_addon_links")
+}
+
+// Which base branches an add-on is offered for. A base node here may be a leaf
+// (one exact configuration) or a higher node (every configuration beneath it).
+model ConfigAddonAttachment {
+  id         String @id @db.Uuid
+  addonId    String @map("addon_id") @db.Uuid
+  baseNodeId String @map("base_node_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  addon    ConfigAddon     @relation(fields: [addonId], references: [id], onDelete: Cascade)
+  baseNode ConfigPriceNode @relation("BaseAttachments", fields: [baseNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([addonId, baseNodeId])
+  @@index([baseNodeId])
+  @@map("config_addon_attachments")
+}
+
+// How a price is charged. A small GROWABLE vocabulary — the editor ships a few
+// common units (per unit, per m², per item…) as code constants and lets staff
+// add their own here, exactly like the question/option dropdowns. A node/add-on
+// stores the chosen `priceUnit` code; null means a one-off/flat amount. Only the
+// custom (staff-added) units live in this table; the defaults are code constants.
+model ConfigPriceUnit {
+  id        String   @id @db.Uuid
+  code      String   @unique // 'per_box', 'per_panel'
+  label     String            // 'per box', 'per panel'
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("config_price_units")
+}
+
+model ConfigPriceNode {
+  id        String  @id @db.Uuid
+  variantId String  @map("variant_id") @db.Uuid
+  parentId  String? @map("parent_id") @db.Uuid
+
+  // NULL = a node of the variant's base price tree. Set = a node of that add-on's
+  // tree instead. The two never mix at a level; the engine's base price only ever
+  // reads addonId = NULL nodes.
+  addonId String? @map("addon_id") @db.Uuid
+
+  // The question this node answers (siblings share it) and the value it stands
+  // for. Ids, not codes: the vocabulary is shared and a value's code could be
+  // re-created, but the tree points at the exact row.
+  groupId String @map("group_id") @db.Uuid
+  valueId String @map("value_id") @db.Uuid
+
+  // The price at this branch, if any. NULL = "just a choice" — it carries no
+  // price and a deeper choice inherits the nearest declared price above it (the
+  // colour under an aluminium door is only a choice; the price sat on the
+  // material). A price may sit on an internal node, and a deeper node overrides
+  // it. A branch that is simply not offered is left out of the tree entirely.
+  amount Decimal? @db.Decimal(12, 2)
+
+  // How that price is charged: null = a one-off/flat amount; otherwise a unit
+  // code ('per_unit', 'per_sqm', 'per_item', …) from the growable price-unit list.
+  priceUnit String? @map("price_unit")
+
+  // Optional notes carried straight from the supplier sheet: a free description
+  // and the "Configuration" spec column. Both staff-facing, both optional.
+  description   String?
+  configuration String?
+
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  variant  ConfigVariant     @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  parent   ConfigPriceNode?  @relation("PriceNodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children ConfigPriceNode[] @relation("PriceNodeChildren")
+  group    OptionGroup       @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  value    OptionValue       @relation(fields: [valueId], references: [id], onDelete: Restrict)
+  addon    ConfigAddon?      @relation("AddonNodes", fields: [addonId], references: [id], onDelete: Cascade)
+
+  // Present only on base nodes: the add-ons attached to this base branch.
+  baseAttachments ConfigAddonAttachment[] @relation("BaseAttachments")
+
+  @@index([variantId])
+  @@index([parentId])
+  @@index([addonId])
+  @@map("config_price_nodes")
 }
 
 // A selectable add-on. NOT an option_group: option group codes are globally
