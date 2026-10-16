@@ -89,18 +89,20 @@ test('a configured door prices from the grid', async ({ page }) => {
   await shot(page, '62-grid-priced');
 });
 
-test('a combination the supplier does not sell refuses to price', async ({ page }) => {
+test('a combination the supplier does not sell is never offered', async ({ page }) => {
   await signInAsAdmin(page);
   await openBenisonQuote(page);
 
-  // 40 mm with PUR banding is sold in SPC only — the dash in the sheet.
+  // 40 mm with PUR banding is sold in SPC only — the dash in the sheet. The
+  // tree does not let the salesperson build the impossible combination in the
+  // first place: on the PUR branch the board question offers ONLY SPC, so there
+  // is nothing to refuse later.
   await page.selectOption('#cfg-variant', 'alu_wpc');
   await page.selectOption('#cfg-ben_thickness', '40');
   await page.selectOption('#cfg-ben_edge_banding', 'pur');
-  await page.selectOption('#cfg-ben_board', 'wpc');
-
-  await expect(page.getByText(/not sold by the supplier/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add to quote' })).toBeDisabled();
+  await expect(page.locator('#cfg-ben_board option[value="spc"]')).toHaveCount(1);
+  await expect(page.locator('#cfg-ben_board option[value="wpc"]')).toHaveCount(0);
+  await expect(page.locator('#cfg-ben_board option[value="fr"]')).toHaveCount(0);
   await shot(page, '63-not-sold');
 });
 

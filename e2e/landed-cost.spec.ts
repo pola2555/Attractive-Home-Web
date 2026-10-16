@@ -5,6 +5,14 @@ import { shot, signInAsAdmin } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
+// Shipment and landed cost are temporarily switched off in the quote
+// (SHIPMENT_ENABLED in src/app/dashboard/(protected)/quotes/[id]/page.tsx), so
+// this whole flow is skipped until it is turned back on. The code and these
+// tests are kept intact — remove this hook when the flag goes back to true.
+test.beforeEach(() => {
+  test.skip(true, 'Shipment + landed cost temporarily disabled in the quote (SHIPMENT_ENABLED).');
+});
+
 let quoteUrl: string;
 
 /** A quote with one priced oak door on it — the input every test here needs. */
