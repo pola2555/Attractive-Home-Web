@@ -6,6 +6,7 @@ import { getTemplate } from '@/lib/configuratorAdmin';
 import TreeEditor from './TreeEditor';
 import { buildEditorModel } from './model';
 import { getPriceTrees, getVocabulary, getPriceUnits } from './priceTree';
+import { getAccessories } from './accessories';
 
 export default async function TreeProductPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -27,7 +28,7 @@ export default async function TreeProductPage({ params }: { params: Promise<{ id
   if (!product) redirect('/dashboard/products');
   if (!product.templateId) redirect(`/dashboard/products/${id}/edit`);
 
-  const [def, colourRows, priceTrees, vocab, priceUnits] = await Promise.all([
+  const [def, colourRows, priceTrees, vocab, priceUnits, accessories] = await Promise.all([
     getTemplate(product.templateId),
     prisma.color.findMany({
       where: { isActive: true },
@@ -37,6 +38,7 @@ export default async function TreeProductPage({ params }: { params: Promise<{ id
     getPriceTrees(product.templateId),
     getVocabulary(),
     getPriceUnits(),
+    getAccessories(id),
   ]);
   const productName = product.translations[0]?.name ?? 'Product';
   const colours = colourRows.map((c) => ({
@@ -72,6 +74,7 @@ export default async function TreeProductPage({ params }: { params: Promise<{ id
           priceTrees={priceTrees}
           vocab={vocab}
           priceUnits={priceUnits}
+          accessories={accessories}
         />
       ) : (
         <p className="text-muted">This product has no configurator template.</p>

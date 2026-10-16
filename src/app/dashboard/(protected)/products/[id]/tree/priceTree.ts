@@ -16,8 +16,21 @@ export type PTNode = {
   priceUnit: string | null;
   description: string | null;
   configuration: string | null;
+  // Images for this branch (plain web URLs), shown on the canvas and the quote.
+  images: string[];
+  // A multi-select LEVEL: this node's siblings may each be picked at once in the
+  // quote and every picked branch is priced. Set on all siblings of a level together.
+  multiSelect: boolean;
   sortOrder: number;
 };
+
+// Coerce a Prisma Json column into a clean list of image URLs: a JSON array of
+// non-empty strings, anything else becomes []. Kept lenient so a hand-edited row
+// never throws the whole canvas.
+export function toImageList(json: unknown): string[] {
+  if (!Array.isArray(json)) return [];
+  return json.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).map((x) => x.trim());
+}
 // A named add-on: its own base-style tree, attached to base branches. Its chosen
 // leaf price ADDS on top of the base.
 export type PTAddon = {
@@ -45,6 +58,8 @@ export type PriceTreeData = {
   currency: string;
   nodes: PTNode[]; // the base price tree
   addons: PTAddon[];
+  // Images for the base ("owner") node — the product/build the tree hangs off.
+  baseImages: string[];
 };
 
 export type VocabValue = { id: string; name: string };
@@ -113,6 +128,8 @@ export async function getPriceTrees(templateId: string): Promise<Record<string, 
     priceUnit: n.priceUnit,
     description: n.description,
     configuration: n.configuration,
+    images: toImageList(n.images),
+    multiSelect: n.multiSelect,
     sortOrder: n.sortOrder,
   });
 
@@ -132,6 +149,7 @@ export async function getPriceTrees(templateId: string): Promise<Record<string, 
     out[v.id] = {
       variantId: v.id,
       currency: v.grid?.currency ?? 'USD',
+      baseImages: toImageList(v.images),
       nodes: baseNodes,
       addons: v.addons.map((a) => ({
         id: a.id,

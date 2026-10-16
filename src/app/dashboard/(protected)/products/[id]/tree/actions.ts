@@ -1184,6 +1184,24 @@ const snapshotNodeSchema = z.object({
   configuration: z.string().nullable().optional(),
   sortOrder: z.number().int(),
 });
+const snapshotAddonSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  colorName: z.string().nullable().optional(),
+  colorHex: z.string().nullable().optional(),
+  amount: z.number().nullable().optional(),
+  priceUnit: z.string().nullable().optional(),
+  attachBase: z.boolean().optional(),
+  description: z.string().nullable().optional(),
+  configuration: z.string().nullable().optional(),
+  sortOrder: z.number().int().optional(),
+});
+const snapshotVariantSchema = z.object({
+  nodes: z.array(snapshotNodeSchema),
+  addons: z.array(snapshotAddonSchema).optional(),
+  attachments: z.array(z.object({ addonId: z.string(), baseNodeId: z.string() })).optional(),
+  links: z.array(z.object({ addonId: z.string(), targetAddonId: z.string() })).optional(),
+});
 
 export async function restorePriceTree(
   productId: string,
@@ -1200,7 +1218,7 @@ export async function restorePriceTree(
   } catch {
     return { error: 'Could not read the snapshot.' };
   }
-  const parsed = z.record(z.string(), z.array(snapshotNodeSchema)).safeParse(raw);
+  const parsed = z.record(z.string(), snapshotVariantSchema).safeParse(raw);
   if (!parsed.success) return { error: 'Could not read the snapshot.' };
 
   const variants = await prisma.configVariant.findMany({
@@ -1211,31 +1229,57 @@ export async function restorePriceTree(
   const variantSet = new Set(variantIds);
 
   await prisma.$transaction(async (tx) => {
-    // Deleting a base node cascade-deletes its add-on attachments, and node ids
-    // are stable across edits, so capture the attachments first and re-create the
-    // ones whose base branch still exists after the rebuild.
-    const attachments = await tx.configAddonAttachment.findMany({
-      where: { addon: { variantId: { in: variantIds } } },
-      select: { addonId: true, baseNodeId: true },
-    });
+    const entries = Object.entries(parsed.data).filter(([vid]) => variantSet.has(vid));
 
-    // Add-on lifecycle isn't versioned, so a snapshot may name an add-on that has
-    // since been deleted; drop those nodes rather than fail the addon FK on insert.
-    const addons = await tx.configAddon.findMany({
-      where: { variantId: { in: variantIds } },
-      select: { id: true },
-    });
-    const addonSet = new Set(addons.map((a) => a.id));
+    // ── 1. Reconcile the add-ons themselves (lifecycle + metadata) ──────────────
+    // The snapshot now versions the add-ons/colour nodes, not just their branches,
+    // so undo/redo can create, delete, rename, recolour or reprice one. Wipe the
+    // live add-ons of these builds (which cascades their branches, attachments and
+    // links) and recreate exactly the set the snapshot holds, keeping ids stable so
+    // branches and attachments still line up.
+    const wantedAddonIds = new Set<string>();
+    const addonCreate: {
+      id: string;
+      variantId: string;
+      name: string;
+      colorName: string | null;
+      colorHex: string | null;
+      amount: number | null;
+      priceUnit: string | null;
+      attachBase: boolean;
+      description: string | null;
+      configuration: string | null;
+      sortOrder: number;
+    }[] = [];
+    for (const [variantId, snap] of entries) {
+      for (const a of snap.addons ?? []) {
+        wantedAddonIds.add(a.id);
+        addonCreate.push({
+          id: a.id,
+          variantId,
+          name: a.name,
+          colorName: a.colorName ?? null,
+          colorHex: a.colorHex ?? null,
+          amount: a.amount ?? null,
+          priceUnit: a.priceUnit ?? null,
+          attachBase: a.attachBase ?? false,
+          description: a.description ?? null,
+          configuration: a.configuration ?? null,
+          sortOrder: a.sortOrder ?? 0,
+        });
+      }
+    }
 
-    // Wipe every node of these builds (base AND add-on trees), then rebuild
-    // parents-before-children so the self-referencing parent FK is always
-    // satisfied on insert.
+    // Deleting the add-ons cascades their branch nodes, attachments and links;
+    // deleting the base nodes cascades any base attachments. After both, bare.
+    await tx.configAddon.deleteMany({ where: { variantId: { in: variantIds } } });
     await tx.configPriceNode.deleteMany({ where: { variantId: { in: variantIds } } });
+    if (addonCreate.length) await tx.configAddon.createMany({ data: addonCreate });
 
+    // ── 2. Rebuild every node (base + add-on branches) parents-before-children ──
     const restoredIds = new Set<string>();
-    for (const [variantId, rawNodes] of Object.entries(parsed.data)) {
-      if (!variantSet.has(variantId)) continue;
-      const nodes = rawNodes.filter((n) => !n.addonId || addonSet.has(n.addonId));
+    for (const [variantId, snap] of entries) {
+      const nodes = snap.nodes.filter((n) => !n.addonId || wantedAddonIds.has(n.addonId));
       const byId = new Map(nodes.map((n) => [n.id, n]));
       const done = new Set<string>();
       const ordered: typeof nodes = [];
@@ -1267,12 +1311,21 @@ export async function restorePriceTree(
       }
     }
 
-    const reattach = attachments.filter((a) => restoredIds.has(a.baseNodeId));
-    if (reattach.length) {
-      await tx.configAddonAttachment.createMany({
-        data: reattach.map((a) => ({ id: uuidv7(), addonId: a.addonId, baseNodeId: a.baseNodeId })),
-      });
+    // ── 3. Rebuild attachments (add-on → base branch) and links (add-on → add-on) ─
+    const attachData: { id: string; addonId: string; baseNodeId: string }[] = [];
+    const linkData: { id: string; addonId: string; targetAddonId: string }[] = [];
+    for (const [, snap] of entries) {
+      for (const at of snap.attachments ?? []) {
+        if (wantedAddonIds.has(at.addonId) && restoredIds.has(at.baseNodeId))
+          attachData.push({ id: uuidv7(), addonId: at.addonId, baseNodeId: at.baseNodeId });
+      }
+      for (const lk of snap.links ?? []) {
+        if (wantedAddonIds.has(lk.addonId) && wantedAddonIds.has(lk.targetAddonId))
+          linkData.push({ id: uuidv7(), addonId: lk.addonId, targetAddonId: lk.targetAddonId });
+      }
     }
+    if (attachData.length) await tx.configAddonAttachment.createMany({ data: attachData });
+    if (linkData.length) await tx.configAddonLink.createMany({ data: linkData });
   });
 
   await writeAudit({
@@ -1344,6 +1397,113 @@ export async function setTreeNodeInfo(
   return { ok: true };
 }
 
+// Parse the images textarea: one URL per line, each a plain http(s) link (no S3
+// upload — the node just points at a hosted image). Blanks are dropped, order is
+// kept, duplicates removed, and the list is capped so a paste cannot bloat a row.
+// Returns an error message when a non-blank line is not a valid http(s) URL.
+const MAX_NODE_IMAGES = 12;
+function parseImages(fd: FormData, key: string): { urls: string[]; error?: string } {
+  const raw = fd.get(key);
+  const text = typeof raw === 'string' ? raw : '';
+  const urls: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const url = line.trim();
+    if (!url) continue;
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { urls: [], error: `"${url.slice(0, 60)}" is not a valid URL.` };
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { urls: [], error: 'Images must be http(s) links.' };
+    }
+    if (!urls.includes(url)) urls.push(url);
+  }
+  if (urls.length > MAX_NODE_IMAGES) {
+    return { urls: [], error: `At most ${MAX_NODE_IMAGES} images.` };
+  }
+  return { urls };
+}
+
+// Images for one price-tree branch (a base node or an add-on option) — plain web
+// URLs, shown on the canvas and beside the choice in the quote. Empty clears them.
+export async function setTreeNodeImages(
+  productId: string,
+  _prev: FormState,
+  fd: FormData,
+): Promise<FormState> {
+  await requirePermission('pricing.write');
+  const templateId = await templateIdOf(productId);
+  const nodeId = str(fd, 'nodeId');
+  const node = await prisma.configPriceNode.findUnique({
+    where: { id: nodeId },
+    include: { variant: { select: { templateId: true } } },
+  });
+  if (!node || node.variant.templateId !== templateId) return { error: 'Unknown branch.' };
+
+  const { urls, error } = parseImages(fd, 'images');
+  if (error) return { error };
+  // Store the list straight (an empty array = none), which sidesteps Prisma's
+  // JsonNull/DbNull handling for a nullable Json column and reads back the same.
+  await prisma.configPriceNode.update({ where: { id: nodeId }, data: { images: urls } });
+  rev(productId);
+  return { ok: true };
+}
+
+// Toggle whether a BASE-tree level is multiple-choice. A level is the set of
+// sibling nodes that share a parent (and a question); the flag is stored on every
+// one of them so the engine reads it off any sibling. Base tree only — an add-on
+// option sub-tree (addonId set) is refused, so colour/add-on nodes are untouched.
+export async function setLevelMultiSelect(
+  productId: string,
+  _prev: FormState,
+  fd: FormData,
+): Promise<FormState> {
+  await requirePermission('pricing.write');
+  const templateId = await templateIdOf(productId);
+  const nodeId = str(fd, 'nodeId');
+  const node = await prisma.configPriceNode.findUnique({
+    where: { id: nodeId },
+    include: { variant: { select: { templateId: true } } },
+  });
+  if (!node || node.variant.templateId !== templateId) return { error: 'Unknown branch.' };
+  if (node.addonId !== null) return { error: 'Multiple-choice applies to base branches only.' };
+
+  const multi = str(fd, 'multi') === '1';
+  // Every sibling of this level (same variant, same parent, base tree) flips
+  // together, so the level is multi-select iff its nodes carry the flag.
+  await prisma.configPriceNode.updateMany({
+    where: { variantId: node.variantId, parentId: node.parentId, addonId: null },
+    data: { multiSelect: multi },
+  });
+  rev(productId);
+  return { ok: true };
+}
+
+// Images for the base ("owner") node — the product/build the tree hangs off.
+// Stored on the variant; shown on the canvas and at the top of the quote.
+export async function setVariantImages(
+  productId: string,
+  _prev: FormState,
+  fd: FormData,
+): Promise<FormState> {
+  await requirePermission('pricing.write');
+  const templateId = await templateIdOf(productId);
+  const variantId = str(fd, 'variantId');
+  const variant = await prisma.configVariant.findUnique({
+    where: { id: variantId },
+    select: { templateId: true },
+  });
+  if (!variant || variant.templateId !== templateId) return { error: 'Unknown build.' };
+
+  const { urls, error } = parseImages(fd, 'images');
+  if (error) return { error };
+  await prisma.configVariant.update({ where: { id: variantId }, data: { images: urls } });
+  rev(productId);
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Add-ons — a named add-on is its own base-style decision tree (its nodes carry
 // its addonId), attached to one or more BASE branches. Its chosen leaf price
@@ -1389,6 +1549,8 @@ export async function createAddon(
   if (str(fd, 'attachBase') === '1') {
     await prisma.configAddon.update({ where: { id }, data: { attachBase: true } });
   }
+  // Or link it to another add-on straight away (dropped on an add-on header).
+  await linkOnCreate(fd, id, variantId);
   await writeAudit({
     userId: user.id,
     entityType: 'config_addon',
@@ -1398,6 +1560,22 @@ export async function createAddon(
   });
   rev(productId);
   return { ok: true };
+}
+
+// Shared by createAddon / createColorNode: when the new add-on was dropped onto
+// another add-on's header, link it to that add-on so it isn't left floating.
+async function linkOnCreate(fd: FormData, addonId: string, variantId: string): Promise<void> {
+  const targetAddonId = str(fd, 'targetAddonId') || null;
+  if (!targetAddonId || targetAddonId === addonId) return;
+  const target = await prisma.configAddon.findUnique({
+    where: { id: targetAddonId },
+    select: { variantId: true },
+  });
+  if (target && target.variantId === variantId) {
+    await prisma.configAddonLink.create({
+      data: { id: uuidv7(), addonId, targetAddonId },
+    });
+  }
 }
 
 // Normalise a colour to a #rrggbb hex, expanding #rgb; null on anything else.
@@ -1452,6 +1630,8 @@ export async function createColorNode(
   if (str(fd, 'attachBase') === '1') {
     await prisma.configAddon.update({ where: { id }, data: { attachBase: true } });
   }
+  // Or link it to another add-on straight away (dropped on an add-on header).
+  await linkOnCreate(fd, id, variantId);
   await writeAudit({
     userId: user.id,
     entityType: 'config_addon',

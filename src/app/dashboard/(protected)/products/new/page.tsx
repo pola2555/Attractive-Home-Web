@@ -5,6 +5,7 @@ import { requireUser, effectivePermissions } from '@/lib/permissions';
 import { getFacetOptions } from '@/lib/catalogAdmin';
 import ProductForm from '../ProductForm';
 import NewTreeProductForm from '../NewTreeProductForm';
+import NewMeasureProductForm from '../NewMeasureProductForm';
 import { createProduct } from '../actions';
 
 export default async function NewProductPage({
@@ -20,6 +21,7 @@ export default async function NewProductPage({
   const canPrice = permissions.has('pricing.write');
   const sp = await searchParams;
   const isTree = sp.type === 'tree' && canPrice;
+  const isMeasure = sp.type === 'measure';
   const facets = await getFacetOptions();
 
   // Existing tree products, offered as templates to copy from.
@@ -47,17 +49,17 @@ export default async function NewProductPage({
       </Link>
       <h1 className="text-2xl font-bold text-heading mt-2 mb-6">New product</h1>
 
-      {canPrice && (
-        <div className="flex flex-col sm:flex-row gap-3 mb-8 max-w-2xl">
-          <Link
-            href="/dashboard/products/new"
-            className={`${cardBase} ${!isTree ? active : idle}`}
-          >
-            <div className="font-medium text-heading">Regular product</div>
-            <p className="text-muted text-sm mt-1">
-              One product with a fixed price and the usual catalog fields.
-            </p>
-          </Link>
+      <div className="flex flex-col sm:flex-row gap-3 mb-8 max-w-4xl">
+        <Link
+          href="/dashboard/products/new"
+          className={`${cardBase} ${!isTree && !isMeasure ? active : idle}`}
+        >
+          <div className="font-medium text-heading">Regular product</div>
+          <p className="text-muted text-sm mt-1">
+            One product with a fixed price and the usual catalog fields.
+          </p>
+        </Link>
+        {canPrice && (
           <Link
             href="/dashboard/products/new?type=tree"
             className={`${cardBase} ${isTree ? active : idle}`}
@@ -69,11 +71,24 @@ export default async function NewProductPage({
               Priced by choices — frames, sizes, colours, add-ons. Built on a canvas.
             </p>
           </Link>
-        </div>
-      )}
+        )}
+        <Link
+          href="/dashboard/products/new?type=measure"
+          className={`${cardBase} ${isMeasure ? active : idle}`}
+        >
+          <div className="font-medium text-heading">
+            By-measure item <span className="text-muted font-normal">(per m², piece…)</span>
+          </div>
+          <p className="text-muted text-sm mt-1">
+            Sold by a unit. Priced as amount × unit price, with a fractional amount allowed.
+          </p>
+        </Link>
+      </div>
 
       {isTree ? (
         <NewTreeProductForm sources={facets.sources} treeProducts={treeProducts} />
+      ) : isMeasure ? (
+        <NewMeasureProductForm sources={facets.sources} />
       ) : (
         <ProductForm action={createProduct} facets={facets} submitLabel="Create product" />
       )}

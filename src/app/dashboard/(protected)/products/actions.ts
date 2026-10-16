@@ -517,6 +517,93 @@ async function cloneConfigTemplate(
       },
     });
   }
+
+  // Add-ons / colour nodes, the base-price DECISION TREE and every add-on's option
+  // tree (all ConfigPriceNode rows), plus which base branches each add-on attaches
+  // to and any add-on→add-on links. Without this the copy loses everything authored
+  // on the canvas — the whole point of a tree product.
+  const srcVariantIds = src.variants.map((v) => v.id);
+  if (srcVariantIds.length) {
+    const addonMap = new Map<string, string>();
+    const addons = await tx.configAddon.findMany({ where: { variantId: { in: srcVariantIds } } });
+    for (const a of addons) {
+      const na = uuidv7();
+      addonMap.set(a.id, na);
+      await tx.configAddon.create({
+        data: {
+          id: na,
+          variantId: variantMap.get(a.variantId) ?? a.variantId,
+          name: a.name,
+          colorName: a.colorName,
+          colorHex: a.colorHex,
+          amount: a.amount,
+          priceUnit: a.priceUnit,
+          attachBase: a.attachBase,
+          description: a.description,
+          configuration: a.configuration,
+          sortOrder: a.sortOrder,
+        },
+      });
+    }
+
+    // Parents are written before children so the self-referencing parent FK holds
+    // within the batch (same ordering restorePriceTree relies on).
+    const nodes = await tx.configPriceNode.findMany({ where: { variantId: { in: srcVariantIds } } });
+    const nodeMap = new Map<string, string>();
+    nodes.forEach((n) => nodeMap.set(n.id, uuidv7()));
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const done = new Set<string>();
+    const ordered: typeof nodes = [];
+    const visit = (n: (typeof nodes)[number]) => {
+      if (done.has(n.id)) return;
+      if (n.parentId && byId.has(n.parentId)) visit(byId.get(n.parentId)!);
+      done.add(n.id);
+      ordered.push(n);
+    };
+    nodes.forEach(visit);
+    if (ordered.length) {
+      await tx.configPriceNode.createMany({
+        data: ordered.map((n) => ({
+          id: nodeMap.get(n.id)!,
+          variantId: variantMap.get(n.variantId) ?? n.variantId,
+          parentId: n.parentId ? (nodeMap.get(n.parentId) ?? null) : null,
+          addonId: n.addonId ? (addonMap.get(n.addonId) ?? null) : null,
+          groupId: n.groupId,
+          valueId: n.valueId,
+          amount: n.amount,
+          priceUnit: n.priceUnit,
+          description: n.description,
+          configuration: n.configuration,
+          sortOrder: n.sortOrder,
+        })),
+      });
+    }
+
+    const srcAddonIds = addons.map((a) => a.id);
+    if (srcAddonIds.length) {
+      const attachments = await tx.configAddonAttachment.findMany({
+        where: { addonId: { in: srcAddonIds } },
+      });
+      const atData = attachments
+        .filter((a) => addonMap.has(a.addonId) && nodeMap.has(a.baseNodeId))
+        .map((a) => ({
+          id: uuidv7(),
+          addonId: addonMap.get(a.addonId)!,
+          baseNodeId: nodeMap.get(a.baseNodeId)!,
+        }));
+      if (atData.length) await tx.configAddonAttachment.createMany({ data: atData });
+
+      const links = await tx.configAddonLink.findMany({ where: { addonId: { in: srcAddonIds } } });
+      const lkData = links
+        .filter((l) => addonMap.has(l.addonId) && addonMap.has(l.targetAddonId))
+        .map((l) => ({
+          id: uuidv7(),
+          addonId: addonMap.get(l.addonId)!,
+          targetAddonId: addonMap.get(l.targetAddonId)!,
+        }));
+      if (lkData.length) await tx.configAddonLink.createMany({ data: lkData });
+    }
+  }
 }
 
 const treeProductSchema = z.object({
@@ -617,6 +704,82 @@ export async function createTreeProduct(
   });
   revalidatePath('/dashboard/products');
   redirect(`/dashboard/products/${id}/tree`);
+}
+
+// ---------------------------------------------------------------------------
+// Create — by-measure product (a flat item sold per unit of measure)
+// ---------------------------------------------------------------------------
+
+const measureProductSchema = z.object({
+  name: z.string().trim().min(1, 'Give the item a name.').max(200),
+  sourceId: z.string().uuid('Choose a supplier.'),
+  unitPrice: z.number().min(0, 'Price cannot be negative.').max(9_999_999_999),
+  priceUnit: z.string().trim().min(1, 'Choose a unit (m², piece, …).').max(50),
+  currency: z.string().trim().length(3),
+});
+
+// A "by-measure" product is a flat item sold by a unit of measure — a wall panel
+// at 26/m², a grille at 15/piece. It carries no configurator tree: the quantity
+// (which may be fractional, e.g. 10.5 m²) is entered on the quote line, where the
+// cost is unitPrice × quantity and is then shipped and taxed like any other goods.
+export async function createMeasureProduct(
+  _prev: ProductFormState,
+  formData: FormData,
+): Promise<ProductFormState> {
+  const user = await requirePermission('catalog.write');
+  const parsed = measureProductSchema.safeParse({
+    name: str(formData, 'name'),
+    sourceId: str(formData, 'sourceId'),
+    unitPrice: Number(str(formData, 'unitPrice') || '0'),
+    priceUnit: str(formData, 'priceUnit'),
+    currency: (str(formData, 'currency') || 'USD').toUpperCase(),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { name, sourceId, unitPrice, priceUnit, currency } = parsed.data;
+
+  const id = uuidv7();
+  const slug = await uniqueSlug(slugify(name) || id);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // kind 'by_measure': the products CHECK only demands a legacy_id for 'stock',
+      // so a by-measure item needs none. It starts unpublished — it is a quote
+      // extra, not a public catalog page.
+      await tx.product.create({
+        data: {
+          id,
+          kind: 'by_measure',
+          slug,
+          sourceId,
+          price: unitPrice,
+          currency,
+          priceUnit,
+          isPublished: false,
+          isAvailable: true,
+        },
+      });
+      await tx.productTranslation.create({
+        data: { id: uuidv7(), productId: id, localeCode: 'en', name },
+      });
+    });
+  } catch (err) {
+    return { error: writeErrorMessage(err) };
+  }
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: id,
+    action: 'create',
+    diff: {
+      kind: { from: null, to: 'by_measure' },
+      name: { from: null, to: name },
+      price: { from: null, to: unitPrice },
+      price_unit: { from: null, to: priceUnit },
+    },
+  });
+  revalidatePath('/dashboard/products');
+  redirect('/dashboard/products');
 }
 
 // ---------------------------------------------------------------------------

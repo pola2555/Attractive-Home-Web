@@ -370,6 +370,12 @@ model Product {
   configUpgrades ConfigUpgrade[] // this product sold as a configurator accessory
   quoteItems   QuoteItem[]
 
+  // Tree-configurator accessories (locks, hinges, pamphlets…). A PRIVATE accessory
+  // is owned by one tree product; a PUBLIC one is owned by none and offered to all.
+  // `accessoryAttachments` are the places THIS product's tree attaches accessories.
+  accessoriesOwned     Accessory[]           @relation("AccessoryOwner")
+  accessoryAttachments AccessoryAttachment[]
+
   @@index([templateId])
   @@index([hsCodeId])
   @@index([sourceId])
