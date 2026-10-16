@@ -14,12 +14,21 @@ import {
 } from '@/lib/quotesAdmin';
 import { pricingInputsHash } from '@/lib/configurator/price';
 import type { TemplateDef } from '@/lib/configurator/types';
+import type { AccessoryDef } from '@/lib/configurator/accessories';
+import { getAccessoryDefsForTemplate } from '@/lib/accessoriesAdmin';
 import { repriceQuote } from '../actions';
+import AddMeasureLine, { type MeasureProduct } from './AddMeasureLine';
 import QuoteConfigurator from './QuoteConfigurator';
 import QuoteHeaderForm from './QuoteHeaderForm';
 import QuoteItems from './QuoteItems';
 import ShipmentPanel from './ShipmentPanel';
 import LandedBreakdown from './LandedBreakdown';
+
+// Shipment is temporarily switched OFF in the quote. The Shipment section, its
+// freight-mode comparison and its metric roll-up are all kept in code — nothing
+// is deleted — but this flag stops them rendering and running. Flip it back to
+// `true` to restore the Shipment section exactly as it was.
+const SHIPMENT_ENABLED = false as boolean;
 
 // The assembly page: configure a product, add it to the cart, attach a
 // shipment, and read the landed cost. Everything money-shaped on this page is
@@ -35,17 +44,49 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   const quote = await getQuoteDetail(id);
   if (!quote) notFound();
 
-  const [templateRows, settings, band, modes, staff] = await Promise.all([
+  const [templateRows, settings, band, staff] = await Promise.all([
     listTemplates(),
     getLandedSettings(),
     computeQuoteLanded(quote),
-    compareFreightModes(quote),
     prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
   ]);
+
+  // Freight modes feed only the (currently disabled) Shipment panel, so they are
+  // not computed while it is off. See SHIPMENT_ENABLED above.
+  const modes = SHIPMENT_ENABLED ? await compareFreightModes(quote) : [];
 
   const templates = (
     await Promise.all(templateRows.filter((row) => row.isActive).map((row) => getTemplate(row.id)))
   ).filter((t): t is TemplateDef => t !== null);
+
+  // By-measure items (wall panels, grilles…) offered as standalone quote lines.
+  const measureProducts: MeasureProduct[] = (
+    await prisma.product.findMany({
+      where: { kind: 'by_measure', isAvailable: true },
+      select: {
+        id: true,
+        price: true,
+        currency: true,
+        priceUnit: true,
+        translations: { where: { localeCode: 'en' }, select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  ).map((p) => ({
+    id: p.id,
+    name: p.translations[0]?.name ?? 'Item',
+    unitPrice: Number(p.price),
+    priceUnit: p.priceUnit ?? 'unit',
+    currency: p.currency,
+  }));
+
+  // Accessories offered per template (public + the template's product's private).
+  const accessoriesByTemplate: Record<string, AccessoryDef[]> = {};
+  await Promise.all(
+    templates.map(async (t) => {
+      accessoriesByTemplate[t.id] = await getAccessoryDefsForTemplate(t.id);
+    }),
+  );
 
   // "Pricing changed since this was priced" — a hash comparison, deliberately
   // not a rule-versioning table. It answers "is this stale?" and nothing more.
@@ -61,7 +102,10 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   }
 
   const editable = isEditable(quote.status);
-  const rolled = rollUpShipmentMetrics(quote);
+  // The item volume/weight roll-up is only shown in the Shipment panel.
+  const rolled = SHIPMENT_ENABLED
+    ? rollUpShipmentMetrics(quote)
+    : { volumeCbm: 0, grossWeightKg: 0, itemsMissingWeight: [] };
 
   return (
     <div className="space-y-8 max-w-6xl">
@@ -130,7 +174,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
 
       <section data-testid="quote-items">
         <h2 className="text-lg font-semibold text-heading mb-3">Items</h2>
-        <QuoteItems quote={quote} canWrite={canWrite && editable} />
+        <QuoteItems quote={quote} canWrite={canWrite && editable} showLanded={SHIPMENT_ENABLED} />
       </section>
 
       {canWrite && editable && (
@@ -139,48 +183,71 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
           <QuoteConfigurator
             quoteId={quote.id}
             templates={templates}
+            accessoriesByTemplate={accessoriesByTemplate}
             currencySymbol={templates[0]?.currency ?? 'USD'}
           />
         </section>
       )}
 
-      <section>
-        <h2 className="text-lg font-semibold text-heading mb-3">Shipment</h2>
-        <ShipmentPanel
-          quoteId={quote.id}
-          shipment={
-            quote.shipment
-              ? {
-                  mode: quote.shipment.mode,
-                  originPort: quote.shipment.originPort,
-                  destinationPort: quote.shipment.destinationPort,
-                  incoterm: quote.shipment.incoterm,
-                  containerType: quote.shipment.containerType,
-                  containerCount: quote.shipment.containerCount,
-                  expectedStorageDays: quote.shipment.expectedStorageDays,
-                  isManualOverride: quote.shipment.isManualOverride,
-                  volumeCbm: quote.shipment.volumeCbm?.toString() ?? null,
-                  grossWeightKg: quote.shipment.grossWeightKg?.toString() ?? null,
-                  notes: quote.shipment.notes,
-                }
-              : null
-          }
-          canWrite={canWrite && editable}
-          rolledVolumeCbm={rolled.volumeCbm}
-          rolledWeightKg={rolled.grossWeightKg}
-          modes={modes}
-        />
-      </section>
+      {canWrite && editable && (
+        <section className="border border-line rounded-lg p-4 bg-surface/40">
+          <h2 className="text-lg font-semibold text-heading mb-1">
+            Add an extra <span className="text-muted text-base font-normal">(sold by unit)</span>
+          </h2>
+          <p className="text-muted text-sm mb-3">
+            Wall panels, grilles and other items priced per m² or per piece. Charged as amount ×
+            unit price and shipped with the rest of the order.
+          </p>
+          <AddMeasureLine quoteId={quote.id} products={measureProducts} />
+        </section>
+      )}
 
-      <section>
-        <h2 className="text-lg font-semibold text-heading mb-3">Landed cost</h2>
-        <LandedBreakdown
-          quote={quote}
-          band={band}
-          vatRecoverable={settings.vatRecoverable}
-          canWrite={canWrite && editable}
-        />
-      </section>
+      {/* Shipment is temporarily switched off — see SHIPMENT_ENABLED above. The
+          panel and its wiring are kept intact; flip the flag to bring it back. */}
+      {SHIPMENT_ENABLED && (
+        <section>
+          <h2 className="text-lg font-semibold text-heading mb-3">Shipment</h2>
+          <ShipmentPanel
+            quoteId={quote.id}
+            shipment={
+              quote.shipment
+                ? {
+                    mode: quote.shipment.mode,
+                    originPort: quote.shipment.originPort,
+                    destinationPort: quote.shipment.destinationPort,
+                    incoterm: quote.shipment.incoterm,
+                    containerType: quote.shipment.containerType,
+                    containerCount: quote.shipment.containerCount,
+                    expectedStorageDays: quote.shipment.expectedStorageDays,
+                    isManualOverride: quote.shipment.isManualOverride,
+                    volumeCbm: quote.shipment.volumeCbm?.toString() ?? null,
+                    grossWeightKg: quote.shipment.grossWeightKg?.toString() ?? null,
+                    notes: quote.shipment.notes,
+                  }
+                : null
+            }
+            canWrite={canWrite && editable}
+            rolledVolumeCbm={rolled.volumeCbm}
+            rolledWeightKg={rolled.grossWeightKg}
+            modes={modes}
+          />
+        </section>
+      )}
+
+      {/* Landed cost is the shipment's output (freight share per component), so
+          it goes with the Shipment section — without a shipment it only reads
+          "save the shipment to cost it". Kept in code; the same flag restores it. */}
+      {SHIPMENT_ENABLED && (
+        <section>
+          <h2 className="text-lg font-semibold text-heading mb-3">Landed cost</h2>
+          <LandedBreakdown
+            quote={quote}
+            band={band}
+            vatRecoverable={settings.vatRecoverable}
+            canWrite={canWrite && editable}
+          />
+        </section>
+      )}
     </div>
   );
 }

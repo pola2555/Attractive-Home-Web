@@ -61,18 +61,45 @@ export async function getQuoteDetail(id: string): Promise<QuoteDetail | null> {
   return prisma.quote.findUnique({ where: { id }, include: quoteDetailInclude });
 }
 
+// A soft-deleted quote is kept this long so it can be restored, then purged.
+export const QUOTE_TRASH_RETENTION_DAYS = 30;
+
+// Whole days a soft-deleted quote has left before the purge removes it. Lives
+// here (not in the page) so the clock read stays out of React's render.
+export function trashDaysLeft(deletedAt: Date): number {
+  const elapsed = (Date.now() - deletedAt.getTime()) / (24 * 60 * 60 * 1000);
+  return Math.max(0, Math.ceil(QUOTE_TRASH_RETENTION_DAYS - elapsed));
+}
+
+// Permanently remove quotes whose trash retention has elapsed. Cascades to their
+// items and shipment (both onDelete: Cascade). Called lazily from listQuotes so
+// the Trash never shows an expired quote and no cron is required.
+export async function purgeExpiredTrash(): Promise<number> {
+  const cutoff = new Date(Date.now() - QUOTE_TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const result = await prisma.quote.deleteMany({ where: { deletedAt: { lt: cutoff } } });
+  return result.count;
+}
+
 export type QuoteListParams = {
   status?: string;
   q?: string;
   page?: number;
   perPage?: number;
+  /** Show the Trash (soft-deleted quotes) instead of the live inbox. */
+  trash?: boolean;
 };
 
 export async function listQuotes(params: QuoteListParams = {}) {
   const perPage = Math.min(Math.max(params.perPage ?? 25, 1), 100);
   const page = Math.max(params.page ?? 1, 1);
 
+  // Clear anything past retention before reading, so an expired quote never
+  // shows in the Trash and the list is always truthful.
+  await purgeExpiredTrash();
+
   const where = {
+    // Live inbox hides soft-deleted quotes; the Trash view shows only them.
+    deletedAt: params.trash ? { not: null } : null,
     ...(params.status && isQuoteStatus(params.status) ? { status: params.status } : {}),
     ...(params.q
       ? {

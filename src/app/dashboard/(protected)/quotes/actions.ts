@@ -20,6 +20,8 @@ import {
 import { pricingInputsHash } from '@/lib/configurator/price';
 import { priceProduct } from '@/lib/configurator/product';
 import { describeSelection, resolveConfiguration } from '@/lib/configurator/resolve';
+import { priceAccessories } from '@/lib/configurator/accessories';
+import { getAccessoryDefsForTemplate } from '@/lib/accessoriesAdmin';
 import type { Selection } from '@/lib/configurator/types';
 
 export type FormState = { error?: string; ok?: boolean };
@@ -81,6 +83,66 @@ function storedUpgrades(value: unknown): Record<string, number> {
   return out;
 }
 
+// Accessories chosen for a line: accessory id -> quantity, same shape (and the
+// same schema) as upgrades. Stored and re-priced the same way.
+function parseAccessories(fd: FormData): Record<string, number> {
+  const raw = str(fd, 'accessoriesJson');
+  if (!raw) return {};
+  try {
+    const parsed = upgradesSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
+}
+function storedAccessories(value: unknown): Record<string, number> {
+  return storedUpgrades(value);
+}
+
+// Canvas add-ons chosen for a line: add-on id -> quantity, same shape as
+// upgrades, stored and re-priced the same way.
+function parseAddons(fd: FormData): Record<string, number> {
+  const raw = str(fd, 'addonsJson');
+  if (!raw) return {};
+  try {
+    const parsed = upgradesSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
+}
+function storedAddons(value: unknown): Record<string, number> {
+  return storedUpgrades(value);
+}
+
+type AccessoryBreakdown = {
+  lines: {
+    accessoryId: string;
+    name: string;
+    quantity: number;
+    unitAmount: number;
+    amount: number;
+  }[];
+  total: number;
+};
+
+// Price the accessories chosen for a line against the set its template offers,
+// so only genuinely-available accessories are charged. Accessories are priced at
+// their listed per-item/bulk price with their OWN quantity — never scaled by the
+// door quantity, never run through the door's margin or the landed-cost chain.
+async function priceLineAccessories(
+  templateId: string,
+  picked: Record<string, number>,
+): Promise<{ picked: Record<string, number>; breakdown: AccessoryBreakdown }> {
+  if (Object.keys(picked).length === 0) return { picked: {}, breakdown: { lines: [], total: 0 } };
+  const defs = await getAccessoryDefsForTemplate(templateId);
+  const result = priceAccessories(defs, picked);
+  const keptIds = new Set(result.lines.map((l) => l.accessoryId));
+  const keptPicked: Record<string, number> = {};
+  for (const [id, qty] of Object.entries(picked)) if (keptIds.has(id)) keptPicked[id] = qty;
+  return { picked: keptPicked, breakdown: { lines: result.lines, total: result.total } };
+}
+
 function parseSelection(fd: FormData): Selection | null {
   const raw = str(fd, 'selectionJson');
   if (!raw) return null;
@@ -96,9 +158,18 @@ function parseSelection(fd: FormData): Selection | null {
 async function loadEditableQuote(quoteId: string) {
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
-    select: { id: true, status: true, reference: true, updatedAt: true, quoteCurrency: true },
+    select: {
+      id: true,
+      status: true,
+      reference: true,
+      updatedAt: true,
+      quoteCurrency: true,
+      deletedAt: true,
+    },
   });
   if (!quote) return { error: 'Quote not found.' as const };
+  if (quote.deletedAt)
+    return { error: 'This quote is in the Trash. Restore it before editing.' as const };
   if (!isEditable(quote.status)) return { error: FROZEN_MESSAGE };
   return { quote };
 }
@@ -202,13 +273,62 @@ export async function updateQuote(_prev: FormState, fd: FormData): Promise<FormS
   return { ok: true };
 }
 
+// SOFT delete: a deleted quote drops out of the inbox but is kept for 30 days
+// (QUOTE_TRASH_RETENTION_DAYS) in the Trash so it can be restored. The purge in
+// listQuotes removes anything older for good. This deliberately departs from the
+// "no soft delete" convention, for quotes only, at the user's request.
 export async function deleteQuote(fd: FormData): Promise<void> {
   const user = await requirePermission('quotes.write');
   const quoteId = str(fd, 'quoteId');
   const quote = await prisma.quote.findUnique({ where: { id: quoteId } });
-  if (!quote) return;
+  if (!quote || quote.deletedAt) return;
 
-  // Hard delete + audit row (docs/DATABASE.md §1: no soft delete).
+  await prisma.quote.update({
+    where: { id: quoteId },
+    data: { deletedAt: new Date(), deletedBy: user.id },
+  });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'quote',
+    entityId: quoteId,
+    action: 'delete',
+    diff: { deletedAt: { from: null, to: new Date().toISOString() } },
+  });
+
+  revalidatePath('/dashboard/quotes');
+  redirect('/dashboard/quotes');
+}
+
+// Bring a soft-deleted quote back to the inbox.
+export async function restoreQuote(fd: FormData): Promise<void> {
+  const user = await requirePermission('quotes.write');
+  const quoteId = str(fd, 'quoteId');
+  const quote = await prisma.quote.findUnique({ where: { id: quoteId } });
+  if (!quote || !quote.deletedAt) return;
+
+  await prisma.quote.update({
+    where: { id: quoteId },
+    data: { deletedAt: null, deletedBy: null },
+  });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'quote',
+    entityId: quoteId,
+    action: 'update',
+    diff: { deletedAt: { from: quote.deletedAt.toISOString(), to: null } },
+  });
+
+  revalidatePath('/dashboard/quotes');
+}
+
+// Permanently remove a quote from the Trash, before its 30 days are up. Only a
+// quote already in the Trash can be hard-deleted this way.
+export async function purgeQuote(fd: FormData): Promise<void> {
+  const user = await requirePermission('quotes.write');
+  const quoteId = str(fd, 'quoteId');
+  const quote = await prisma.quote.findUnique({ where: { id: quoteId } });
+  if (!quote || !quote.deletedAt) return;
+
   await prisma.quote.delete({ where: { id: quoteId } });
   await writeAudit({
     userId: user.id,
@@ -219,7 +339,6 @@ export async function deleteQuote(fd: FormData): Promise<void> {
   });
 
   revalidatePath('/dashboard/quotes');
-  redirect('/dashboard/quotes');
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +366,8 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
   // Re-validated server-side. The client already showed these messages, but a
   // form post is not required to come from that client.
   const picked = parseUpgrades(fd);
+  const pickedAddons = parseAddons(fd);
+  const accPicked = parseAccessories(fd);
 
   const resolution = resolveConfiguration(template, selection, quantity, picked);
   if (!resolution.isComplete) {
@@ -254,7 +375,14 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
   }
 
   const productRules = productId ? await getProductRules(productId) : [];
-  const priced = priceProduct({ template, selection, picked, quantity, extraRules: productRules });
+  const priced = priceProduct({
+    template,
+    selection,
+    picked,
+    pickedAddons,
+    quantity,
+    extraRules: productRules,
+  });
   if (priced.issues.length) return { error: priced.issues[0] };
 
   // A configuration that resolved cleanly can still have no price: the cell
@@ -265,6 +393,10 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
       error: 'This combination has no price. Change an answer, or fill the gap in the price grid.',
     };
   }
+
+  // Accessories are priced separately (listed per-item/bulk, own quantities) and
+  // never folded into the door's unit cost, margin or landed import cost.
+  const acc = await priceLineAccessories(template.id, accPicked);
 
   // HS code, most specific first: the item override, then the product's, then
   // the template's, then the settings default. A configured item carries no
@@ -306,6 +438,8 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
       selection: selection as object,
       selectionLabel: describeSelection(template, selection),
       upgrades: picked as object,
+      addons: pickedAddons as object,
+      accessories: acc.picked as object,
       derived: resolution.derived as object,
       unitCost: priced.unitCost,
       costCurrency: priced.currency,
@@ -316,9 +450,96 @@ export async function addQuoteItem(_prev: FormState, fd: FormData): Promise<Form
         gridKey: priced.grid.key,
         bands: priced.bandLines,
         upgrades: priced.upgradeLines,
+        addons: priced.addonLines,
+        accessories: acc.breakdown,
       },
       pricedAt: new Date(),
       pricingInputsHash: pricingInputsHash([...template.rules, ...productRules]),
+    },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'quote_item',
+    entityId: id,
+    action: 'create',
+    diff: { quote: { from: null, to: loaded.quote.reference } },
+  });
+
+  await recostShipment(quoteId);
+  revalidatePath(`/dashboard/quotes/${quoteId}`);
+  return { ok: true };
+}
+
+// Add a by-measure product (a wall panel, a grille…) as its own quote line.
+// Unlike addQuoteItem there is no configurator: the line is a flat unitPrice ×
+// quantity, the quantity may be fractional (10.5 m²), and it is costed through the
+// same China → UAE landed chain as every other goods line.
+export async function addMeasureItem(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requirePermission('quotes.write');
+  const quoteId = str(fd, 'quoteId');
+  const loaded = await loadEditableQuote(quoteId);
+  if ('error' in loaded) return { error: loaded.error };
+
+  const productId = str(fd, 'productId');
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: {
+      id: true,
+      kind: true,
+      price: true,
+      currency: true,
+      priceUnit: true,
+      hsCodeId: true,
+      translations: { where: { localeCode: 'en' }, select: { name: true } },
+    },
+  });
+  if (!product || product.kind !== 'by_measure') return { error: 'Choose a by-measure item.' };
+
+  const quantity = Number(str(fd, 'quantity') || '0');
+  if (!Number.isFinite(quantity) || quantity <= 0) return { error: 'Quantity must be positive.' };
+
+  const unitPrice = Number(product.price);
+  const unit = product.priceUnit ?? 'unit';
+  const name = product.translations[0]?.name ?? 'Item';
+
+  // HS code: the product's own, else the settings default. There is no template to
+  // inherit from, so without this step customs quietly falls back to 5%.
+  const settings = await getLandedSettings();
+  let hsCodeId = product.hsCodeId;
+  if (!hsCodeId && settings.defaultHsCode) {
+    const fallback = await prisma.hsCode.findUnique({ where: { code: settings.defaultHsCode } });
+    hsCodeId = fallback?.id ?? null;
+  }
+
+  const last = await prisma.quoteItem.findFirst({
+    where: { quoteId },
+    orderBy: { sortOrder: 'desc' },
+    select: { sortOrder: true },
+  });
+
+  const id = uuidv7();
+  await prisma.quoteItem.create({
+    data: {
+      id,
+      quoteId,
+      sortOrder: (last?.sortOrder ?? -1) + 1,
+      productId: product.id,
+      templateId: null,
+      hsCodeId,
+      quantity,
+      nameSnapshot: name,
+      codeSnapshot: null,
+      // A by-measure line has no configurator selection; the empty object keeps the
+      // NOT NULL column honest, and the label carries the unit.
+      selection: {},
+      selectionLabel: `Sold per ${unit}`,
+      unitCost: unitPrice,
+      costCurrency: product.currency,
+      // No derived weight/volume: freight for this line stays understated (and
+      // recostShipment already warns) until a weight is set on the shipment.
+      priceBreakdown: { measure: { unit, unitPrice } },
+      pricedAt: new Date(),
     },
   });
 
@@ -357,15 +578,20 @@ export async function updateQuoteItemQuantity(fd: FormData): Promise<void> {
   if (template) {
     const selection = item.selection as Selection;
     const picked = storedUpgrades(item.upgrades);
+    const pickedAddons = storedAddons(item.addons);
     const productRules = item.productId ? await getProductRules(item.productId) : [];
     const priced = priceProduct({
       template,
       selection,
       picked,
+      pickedAddons,
       quantity,
       extraRules: productRules,
     });
     if (!priced.issues.length) {
+      // Accessory quantities are independent of the door quantity, but a re-price
+      // keeps their breakdown fresh against any price change.
+      const acc = await priceLineAccessories(template.id, storedAccessories(item.accessories));
       data.unitCost = priced.unitCost;
       data.priceBreakdown = {
         lines: priced.breakdown,
@@ -374,6 +600,8 @@ export async function updateQuoteItemQuantity(fd: FormData): Promise<void> {
         gridKey: priced.grid.key,
         bands: priced.bandLines,
         upgrades: priced.upgradeLines,
+        addons: priced.addonLines,
+        accessories: acc.breakdown,
       };
       data.pricedAt = new Date();
     }
@@ -430,16 +658,20 @@ export async function repriceQuote(fd: FormData): Promise<void> {
     const productRules = item.productId ? await getProductRules(item.productId) : [];
     const selection = item.selection as Selection;
     const picked = storedUpgrades(item.upgrades);
+    const pickedAddons = storedAddons(item.addons);
     const quantity = item.quantity.toNumber();
     const resolution = resolveConfiguration(template, selection, quantity, picked);
     const priced = priceProduct({
       template,
       selection,
       picked,
+      pickedAddons,
       quantity,
       extraRules: productRules,
     });
     if (priced.issues.length) continue;
+
+    const acc = await priceLineAccessories(template.id, storedAccessories(item.accessories));
 
     await prisma.quoteItem.update({
       where: { id: item.id },
@@ -452,6 +684,10 @@ export async function repriceQuote(fd: FormData): Promise<void> {
           lines: priced.breakdown,
           lineExtras: priced.lineExtras,
           quoteExtras: priced.quoteExtras,
+          bands: priced.bandLines,
+          upgrades: priced.upgradeLines,
+          addons: priced.addonLines,
+          accessories: acc.breakdown,
         },
         pricedAt: new Date(),
         pricingInputsHash: pricingInputsHash([...template.rules, ...productRules]),

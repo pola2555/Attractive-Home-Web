@@ -49,6 +49,12 @@ model Quote {
   notes      String?
   validUntil DateTime? @map("valid_until") @db.Date
 
+  // Soft delete. A deleted quote drops out of the inbox but is KEPT for 30 days
+  // so it can be restored from the Trash; the purge (in listQuotes) removes any
+  // older than that for good. Null = live.
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?   @map("deleted_by") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -64,6 +70,7 @@ model Quote {
   @@index([assignedTo])
   @@index([leadId])
   @@index([customerId])
+  @@index([deletedAt])
   @@map("quotes")
 }
 
@@ -103,6 +110,20 @@ model QuoteItem {
   // because re-pricing a line without them would silently drop every add-on
   // the customer agreed to.
   upgrades Json?
+
+  // Chosen canvas ADD-ONS and how many of each: {<addonId>: 1}. An add-on is
+  // authored on the product's tree canvas and priced straight from it (flat
+  // amount, or its own option sub-tree); this is what lets the canvas be the
+  // single source of truth for a configured line's extras. Kept apart from
+  // `upgrades` (which indexes the legacy ConfigUpgrade rows by code) during the
+  // migration from those rows to canvas add-ons.
+  addons Json?
+
+  // Chosen standalone accessories (locks, hinges, pamphlets…) and how many of
+  // each: {<accessoryId>: 4}. Kept apart from `upgrades` because an accessory is
+  // its own product sold separately — priced at its listed per-item or bulk
+  // price, NOT run through the door's margin or the China→UAE landed-cost chain.
+  accessories Json?
 
   // Computed by the formula evaluator: {area_m2: 1.89, weight_kg: 42.3}.
   // A null entry means the formula failed and the item needs review — never

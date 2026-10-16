@@ -119,3 +119,24 @@
     }
   }
 }
+
+/* A configurator step opening onto the next level of the tree: it fades and
+   settles down into place as the choice before it unlocks it. */
+@keyframes cfg-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.cfg-reveal {
+  animation: cfg-reveal 0.22s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cfg-reveal {
+    animation: none;
+  }
+}
