@@ -411,6 +411,12 @@ model ConfigVariant {
   includedSpec String? @map("included_spec")
   imageUrl     String? @map("image_url")
 
+  // Base-node gallery: images for the product/build "base" node that the price
+  // tree hangs off, shown on the canvas and at the top of the quote so the base
+  // build can be seen, not just named. A JSON array of plain URL strings (no S3
+  // pipeline, like imageUrl above); null or empty = none.
+  images Json?
+
   sortOrder Int     @default(0) @map("sort_order")
   isActive  Boolean @default(true) @map("is_active")
 
@@ -648,6 +654,18 @@ model ConfigPriceNode {
   description   String?
   configuration String?
 
+  // Optional images for this branch (plain web URLs, no S3 pipeline), shown on
+  // the canvas and in the quote so a choice can be seen, not just named. A JSON
+  // array of URL strings; null or empty = none.
+  images Json?
+
+  // A MULTI-SELECT LEVEL. A level is the set of sibling nodes that share this
+  // node's parent and question. When set, the quote lets several of those
+  // siblings be picked at once, each picked branch opens and is priced, and the
+  // prices are summed. The editor's per-level toggle sets it on every sibling of
+  // the level together, so the level is multi-select iff its nodes carry it.
+  multiSelect Boolean @default(false) @map("multi_select")
+
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -810,4 +828,119 @@ model ConfigBand {
   @@index([templateOptionId, sortOrder])
   @@index([variantId])
   @@map("config_bands")
+}
+
+// ---------------------------------------------------------------------------
+// ACCESSORIES — a standalone product type (locks, hinges, pamphlets, samples)
+// sold alongside the configured door, modelled from the Benison "Additional
+// Accessories" sheet. Unlike a ConfigUpgrade (which belongs to ONE template), an
+// accessory can be PUBLIC — offered to every tree product — or PRIVATE to one,
+// and it attaches to the canvas as its own node pointing at any tree node(s).
+//
+// 1:1 with the sheet: one accessory carries one finish + one price. A hinge that
+// costs more in "other colours" is simply two accessory rows, exactly as the
+// supplier lists them.
+// ---------------------------------------------------------------------------
+model Accessory {
+  id   String  @id @db.Uuid
+  name String
+
+  // The supplier's own grouping, mirrored so the palette can shelve chips the way
+  // the sheet reads: 'Locks', 'Hinges', 'Marketing'. Free text; optional.
+  category String?
+
+  // One optional finish, authored freely here (a name + an optional hex swatch),
+  // like a colour node — not a row in the shared colour library.
+  colorName String? @map("color_name")
+  colorHex  String? @map("color_hex")
+
+  // 'private' = belongs to ONE tree product (ownerProductId set); 'public' =
+  // offered to every tree product (ownerProductId null). An accessory can only be
+  // turned private while it is not attached in any product other than its owner.
+  scope          String  @default("private")
+  ownerProductId String? @map("owner_product_id") @db.Uuid
+
+  // 'per_item' = unitPrice × ordered quantity. 'bulk' = the `tiers` price breaks
+  // (the highest minQty at or below the ordered quantity wins). The editor refuses
+  // to save until one mode is chosen and its price(s) are present.
+  pricingMode String   @map("pricing_mode")
+  unitPrice   Decimal? @map("unit_price") @db.Decimal(12, 2)
+
+  notes String?
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // A private accessory dies with the product that owns it; a public one (null) is
+  // unaffected.
+  ownerProduct Product? @relation("AccessoryOwner", fields: [ownerProductId], references: [id], onDelete: Cascade)
+
+  tiers       AccessoryPriceTier[]
+  images      AccessoryImage[]
+  attachments AccessoryAttachment[]
+
+  @@index([ownerProductId])
+  @@index([scope])
+  @@map("accessories")
+}
+
+// Quantity breaks for a BULK accessory — the colour-pamphlet shape (1 → 30.00,
+// 100 → 15.00, 200 → 10.00). Same rule as ConfigUpgradeTier: the highest minQty
+// at or below the ordered quantity sets the unit price.
+model AccessoryPriceTier {
+  id          String  @id @db.Uuid
+  accessoryId String  @map("accessory_id") @db.Uuid
+  minQty      Int     @map("min_qty")
+  unitAmount  Decimal @map("unit_amount") @db.Decimal(12, 2)
+
+  accessory Accessory @relation(fields: [accessoryId], references: [id], onDelete: Cascade)
+
+  @@unique([accessoryId, minQty])
+  @@map("accessory_price_tiers")
+}
+
+// An accessory's images (reusing the same S3 media pipeline as product images).
+// sortOrder 0 = primary.
+model AccessoryImage {
+  id          String  @id @db.Uuid
+  accessoryId String  @map("accessory_id") @db.Uuid
+  sortOrder   Int     @map("sort_order")
+  s3Key       String  @map("s3_key")
+  thumbKey    String? @map("thumb_key")
+  width       Int?
+  height      Int?
+
+  accessory Accessory @relation(fields: [accessoryId], references: [id], onDelete: Cascade)
+
+  @@unique([accessoryId, sortOrder])
+  @@map("accessory_images")
+}
+
+// Where a tree product attaches an accessory. One accessory can attach to several
+// nodes, and (when public) across several products — each row is one placement.
+// The anchor is polymorphic so it can point at the whole product, a base branch,
+// an add-on's option, or an add-on header:
+//   kind='product' ref=variantId        → the whole product/build ("main node")
+//   kind='base'    ref=ConfigPriceNode  → a base branch (pn:)
+//   kind='anode'   ref=ConfigPriceNode  → an add-on's option node (an:)
+//   kind='addon'   ref=ConfigAddon      → an add-on header (ad:)
+// ref is a plain id (not an FK — it is polymorphic); an attachment whose anchor no
+// longer resolves is simply dropped when the canvas loads.
+model AccessoryAttachment {
+  id          String @id @db.Uuid
+  accessoryId String @map("accessory_id") @db.Uuid
+  productId   String @map("product_id") @db.Uuid
+  anchorKind  String @map("anchor_kind")
+  anchorRef   String @map("anchor_ref")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  accessory Accessory @relation(fields: [accessoryId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([accessoryId, productId, anchorKind, anchorRef])
+  @@index([productId])
+  @@index([accessoryId])
+  @@map("accessory_attachments")
 }

@@ -8,6 +8,7 @@ import type {
   InputKind,
   NumericRange,
   OptionDef,
+  PriceTreeNodeDef,
   PricingRuleDef,
   PricingStage,
   PricingBasis,
@@ -27,6 +28,20 @@ import type {
 // labels resolve against 'en' with the raw code as the last resort.
 
 const ADMIN_LOCALE = 'en';
+
+// Templates whose extras (upgrades, later sizes/accessories) are priced from the
+// tree canvas rather than the legacy ConfigUpgrade/ConfigBand rows. A migration
+// allowlist: a template is added here once its duplicate rows are retired, so a
+// half-migrated product never shows both. Remove this gate once every template
+// has moved over.
+const CANVAS_EXTRAS_TEMPLATES = new Set<string>([
+  'aluminum_frame',
+  'kitchen_cabinet',
+  'sliding_wardrobe',
+  'tv_media_unit',
+  'bathroom_vanity',
+  'modular_bookshelf',
+]);
 
 function num(value: { toNumber(): number } | null | undefined): number | null {
   return value === null || value === undefined ? null : value.toNumber();
@@ -63,6 +78,18 @@ function asAttributes(value: unknown): Record<string, number> | null {
     if (typeof raw === 'number' && Number.isFinite(raw)) out[key] = raw;
   }
   return Object.keys(out).length ? out : null;
+}
+
+// A colour node on the canvas carries a free-text name ("Marsha Grey"); the
+// quote's colour option value carries a code ("marsha_grey"). This is the link
+// between the two, so a colour's canvas attachments can decide the option
+// value's availability.
+function slugifyColour(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 const templateInclude = {
@@ -103,12 +130,18 @@ const templateInclude = {
           cells: true,
         },
       },
-      // The decision-tree base price; the engine works in codes. Only base nodes
-      // (addonId = null) — add-on trees are priced separately, not as the base.
+      // The decision-tree nodes: the base price (addonId = null) AND every
+      // add-on's own option sub-tree (addonId set). Split apart in toTemplateDef.
       priceNodes: {
-        where: { addonId: null },
         orderBy: { sortOrder: 'asc' },
         include: { group: { select: { code: true } }, value: { select: { code: true } } },
+      },
+      // The canvas add-ons, loaded so the quote prices them straight from the
+      // canvas — a single source of truth — reading each one's price and the
+      // branches it is attached to, instead of a parallel table of rows.
+      addons: {
+        orderBy: { sortOrder: 'asc' },
+        include: { attachments: { select: { baseNodeId: true } } },
       },
     },
   },
@@ -142,6 +175,50 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
   // and reasoned about without a database.
   const variantCodeById = new Map(row.variants.map((v) => [v.id, v.code]));
 
+  // A colour's availability is NOT hand-authored: it is read off the canvas,
+  // from the base branches its colour node is attached to. For each colour node
+  // we rebuild the root→node path of every branch it hangs on as a condition
+  // (`thickness=45 AND edge=alu_silent`), OR them together, and gate the
+  // matching colour option value by it. The value then shows exactly where the
+  // canvas says the colour exists — one source of truth, the tree.
+  const colourConditionByCode = new Map<string, Condition | null>();
+  for (const variant of row.variants) {
+    const baseNodes = variant.priceNodes.filter((n) => n.addonId === null);
+    const nodeById = new Map(baseNodes.map((n) => [n.id, n]));
+    const pathCondition = (nodeId: string): Condition | null => {
+      const parts: Condition[] = [];
+      let cur = nodeById.get(nodeId);
+      let guard = 0;
+      while (cur && guard++ <= nodeById.size) {
+        parts.unshift({ in: [cur.value.code], group: cur.group.code });
+        cur = cur.parentId ? nodeById.get(cur.parentId) : undefined;
+      }
+      if (parts.length === 0) return null;
+      return parts.length === 1 ? parts[0] : { all: parts };
+    };
+    for (const addon of variant.addons) {
+      if (!addon.colorHex) continue;
+      const code = slugifyColour(addon.colorName ?? addon.name);
+      let condition: Condition | null;
+      if (addon.attachBase) {
+        condition = null; // attached to the whole base price → always offered
+      } else if (addon.attachments.length > 0) {
+        const anchors = addon.attachments
+          .map((a) => pathCondition(a.baseNodeId))
+          .filter((c): c is Condition => c !== null);
+        condition =
+          anchors.length === 0 ? { any: [] } : anchors.length === 1 ? anchors[0] : { any: anchors };
+      } else {
+        condition = { any: [] }; // attached nowhere → never offered
+      }
+      // A colour offered on more than one variant is available on any of them.
+      const existing = colourConditionByCode.get(code);
+      if (existing === undefined) colourConditionByCode.set(code, condition);
+      else if (existing === null || condition === null) colourConditionByCode.set(code, null);
+      else colourConditionByCode.set(code, { any: [existing, condition] });
+    }
+  }
+
   const options: OptionDef[] = row.options.map((option) => ({
     id: option.id,
     groupCode: option.group.code,
@@ -156,19 +233,24 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
     ranges: asRanges(option.ranges),
     variantCode: variantCodeById.get(option.variantId ?? '') ?? null,
     configText: option.configText,
-    values: option.values.map((join) => ({
-      id: join.value.id,
-      code: join.value.code,
-      name: join.value.translations[0]?.name ?? join.value.code,
-      numericValue: num(join.value.numericValue),
-      attributes: asAttributes(join.value.attributes),
-      colorHex: join.value.color?.hex ?? null,
-      productId: join.value.productId,
-      sortOrder: join.sortOrder,
-      condition: asCondition(join.condition),
-      configText: join.configText,
-      imageUrl: join.imageUrl,
-    })),
+    values: option.values.map((join) => {
+      // A colour value takes its availability from the canvas (above); any
+      // other value keeps the condition stored on the row.
+      const canvasColour = colourConditionByCode.get(join.value.code);
+      return {
+        id: join.value.id,
+        code: join.value.code,
+        name: join.value.translations[0]?.name ?? join.value.code,
+        numericValue: num(join.value.numericValue),
+        attributes: asAttributes(join.value.attributes),
+        colorHex: join.value.color?.hex ?? null,
+        productId: join.value.productId,
+        sortOrder: join.sortOrder,
+        condition: canvasColour !== undefined ? canvasColour : asCondition(join.condition),
+        configText: join.configText,
+        imageUrl: join.imageUrl,
+      };
+    }),
   }));
 
   const constraints: ConstraintDef[] = row.constraints.map((constraint) => ({
@@ -179,12 +261,33 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
     message: constraint.message,
   }));
 
+  // A Json image column -> a clean list of URL strings; anything malformed -> [].
+  const imageList = (json: unknown): string[] =>
+    Array.isArray(json)
+      ? json.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).map((x) => x.trim())
+      : [];
+
+  const toTreeNode = (
+    n: TemplateRow['variants'][number]['priceNodes'][number],
+  ): PriceTreeNodeDef => ({
+    id: n.id,
+    parentId: n.parentId,
+    groupCode: n.group.code,
+    valueCode: n.value.code,
+    amount: num(n.amount),
+    sortOrder: n.sortOrder,
+    priceUnit: n.priceUnit,
+    images: imageList(n.images),
+    multiSelect: n.multiSelect,
+  });
+
   return {
     id: row.id,
     code: row.code,
     name: row.name,
     currency: row.currency,
     hsCodeId: row.hsCodeId,
+    extrasFromCanvas: CANVAS_EXTRAS_TEMPLATES.has(row.code),
     options,
     constraints,
     derivedQuantities: row.derivedQuantities.map((q) => ({
@@ -202,6 +305,7 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
       name: variant.name,
       includedSpec: variant.includedSpec,
       imageUrl: variant.imageUrl,
+      images: imageList(variant.images),
       sortOrder: variant.sortOrder,
       grid: variant.grid
         ? {
@@ -215,13 +319,18 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
             ),
           }
         : null,
-      priceTree: variant.priceNodes.map((n) => ({
-        id: n.id,
-        parentId: n.parentId,
-        groupCode: n.group.code,
-        valueCode: n.value.code,
-        amount: num(n.amount),
-        sortOrder: n.sortOrder,
+      // Base price nodes only; the add-on sub-trees ride on `addons` below.
+      priceTree: variant.priceNodes.filter((n) => n.addonId === null).map(toTreeNode),
+      addons: variant.addons.map((a) => ({
+        id: a.id,
+        name: a.name,
+        amount: num(a.amount),
+        priceUnit: a.priceUnit,
+        colorHex: a.colorHex,
+        attachBase: a.attachBase,
+        attachedBaseNodeIds: a.attachments.map((x) => x.baseNodeId),
+        nodes: variant.priceNodes.filter((n) => n.addonId === a.id).map(toTreeNode),
+        sortOrder: a.sortOrder,
       })),
     })),
 

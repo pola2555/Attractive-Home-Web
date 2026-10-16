@@ -192,6 +192,33 @@ export type PriceTreeNodeDef = {
   valueCode: string;
   amount: number | null;
   sortOrder: number;
+  /** How this node's price is charged; null = one-off/flat. Used by add-on trees. */
+  priceUnit?: string | null;
+  /** Images for this branch (plain web URLs), shown beside the choice in the quote. */
+  images?: string[];
+  /**
+   * Set on every sibling of a MULTI-SELECT level (a base-tree level whose nodes
+   * may each be picked at once; every picked branch is priced and the prices are
+   * summed). Base tree only — add-on sub-trees and colour nodes never set it.
+   */
+  multiSelect?: boolean;
+};
+
+// A canvas add-on as the pricing engine sees it: either a FLAT price (`amount`
+// + `priceUnit`) or its own option sub-tree (`nodes`, priced like the base
+// tree). It is offered when `attachBase` is set, or when the base selection
+// reaches one of `attachedBaseNodeIds`. A colour node is an add-on with
+// `colorHex` set.
+export type AddonDef = {
+  id: string;
+  name: string;
+  amount: number | null;
+  priceUnit: string | null;
+  colorHex: string | null;
+  attachBase: boolean;
+  attachedBaseNodeIds: string[];
+  nodes: PriceTreeNodeDef[];
+  sortOrder: number;
 };
 
 export type VariantDef = {
@@ -201,10 +228,14 @@ export type VariantDef = {
   /** What the base price already includes, verbatim from the supplier. */
   includedSpec: string | null;
   imageUrl: string | null;
+  /** Base-node gallery (plain web URLs), shown atop the quote once the build is chosen. */
+  images?: string[];
   sortOrder: number;
   grid: PriceGridDef | null;
   /** When present (non-empty), the base price comes from this tree, not `grid`. */
   priceTree?: PriceTreeNodeDef[];
+  /** The canvas add-ons for this variant (colours, upgrades, sizes…). */
+  addons?: AddonDef[];
 };
 
 export const UPGRADE_UNITS = ['flat', 'per_unit', 'per_set', 'per_sqm', 'per_piece'] as const;
@@ -279,6 +310,13 @@ export type TemplateDef = {
   variants?: VariantDef[];
   upgrades?: UpgradeDef[];
   bands?: BandDef[];
+  /**
+   * This template's EXTRAS (upgrades, and later sizes/accessories) are authored
+   * on the tree canvas and priced from its add-ons, rather than from the
+   * parallel ConfigUpgrade/ConfigBand rows. A migration gate: templates flip to
+   * true one at a time so a half-migrated template never shows both.
+   */
+  extrasFromCanvas?: boolean;
 };
 
 // ---------------------------------------------------------------------------

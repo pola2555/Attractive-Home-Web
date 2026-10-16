@@ -47,7 +47,7 @@ export type PriceBreakdownLine = {
    * whether a figure is the supplier's published cell, an automatic size step,
    * something they ticked, or a margin the company applied.
    */
-  source?: 'rule' | 'grid' | 'band' | 'upgrade';
+  source?: 'rule' | 'grid' | 'band' | 'upgrade' | 'addon';
   /** Human label for seeded lines; rules are identified by their code. */
   label?: string;
 };
@@ -65,7 +65,7 @@ export type PriceSeedLine = {
   code: string;
   label: string;
   amount: number;
-  source: 'grid' | 'band' | 'upgrade';
+  source: 'grid' | 'band' | 'upgrade' | 'addon';
   /** Charged once per line rather than per unit — a survey fee, say. */
   perLine?: boolean;
 };

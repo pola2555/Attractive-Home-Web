@@ -1,6 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { lookupPriceTree } from './tree';
+import {
+  lookupPriceTree,
+  treeSelectedImages,
+  treeOptionAvailability,
+  multiSelectGroupCodes,
+} from './tree';
 import { priceProduct, withVariant } from './product';
 import type { PriceTreeNodeDef, Selection, TemplateDef } from './types';
 
@@ -47,6 +52,15 @@ function sel(map: Record<string, string>): Selection {
   const out: Selection = {};
   for (const [g, v] of Object.entries(map)) {
     out[g] = { groupCode: g, valueCodes: [v], numericValue: null };
+  }
+  return out;
+}
+
+// A selection where a level may hold several picked values (a multi-select level).
+function selMulti(map: Record<string, string[]>): Selection {
+  const out: Selection = {};
+  for (const [g, codes] of Object.entries(map)) {
+    out[g] = { groupCode: g, valueCodes: codes, numericValue: null };
   }
   return out;
 }
@@ -155,5 +169,117 @@ describe('the base-price decision tree', () => {
     assert.equal(priced.unitCost, 80);
     assert.equal(priced.isPriceable, true);
     assert.equal(priced.currency, 'USD');
+  });
+});
+
+describe('images along the chosen path', () => {
+  // thickness (image) -> material (alu has an image, pur has none) -> colour.
+  function imgTree(): PriceTreeNodeDef[] {
+    const nodes: PriceTreeNodeDef[] = [];
+    const thick = { ...node(null, 'thickness', '40'), images: ['t.jpg'] };
+    nodes.push(thick);
+    const alu = { ...node(thick.id, 'material', 'alu', 80), images: ['alu-1.jpg', 'alu-2.jpg'] };
+    nodes.push(alu);
+    nodes.push(node(alu.id, 'color', 'marsha')); // no images on the colour
+    const pur = node(thick.id, 'material', 'pur', 65); // no images on pur
+    nodes.push(pur);
+    return nodes;
+  }
+  const nodes = imgTree();
+
+  it('maps each answered level to the chosen node’s images', () => {
+    const r = treeSelectedImages(nodes, sel({ thickness: '40', material: 'alu', color: 'marsha' }));
+    assert.deepEqual(r.get('thickness'), ['t.jpg']);
+    assert.deepEqual(r.get('material'), ['alu-1.jpg', 'alu-2.jpg']);
+    // The colour carries no images, so it gets no entry rather than an empty one.
+    assert.equal(r.has('color'), false);
+  });
+
+  it('only reaches as far as the selection goes', () => {
+    const r = treeSelectedImages(nodes, sel({ thickness: '40' }));
+    assert.deepEqual(r.get('thickness'), ['t.jpg']);
+    assert.equal(r.has('material'), false);
+  });
+
+  it('a chosen node with no images contributes nothing', () => {
+    const r = treeSelectedImages(nodes, sel({ thickness: '40', material: 'pur' }));
+    assert.deepEqual(r.get('thickness'), ['t.jpg']);
+    assert.equal(r.has('material'), false);
+  });
+
+  it('an empty tree yields an empty map', () => {
+    assert.equal(treeSelectedImages([], sel({})).size, 0);
+  });
+});
+
+describe('multi-select levels sum their picked branches', () => {
+  // A root MULTI level of independently-priced modules (each a priced leaf).
+  const modules: PriceTreeNodeDef[] = [
+    { ...node(null, 'module', 'shoe', 90), multiSelect: true },
+    { ...node(null, 'module', 'drawer', 140), multiSelect: true },
+    { ...node(null, 'module', 'glass', 180), multiSelect: true },
+  ];
+
+  it('sums the price of every picked module', () => {
+    const r = lookupPriceTree(modules, selMulti({ module: ['shoe', 'drawer'] }), 'USD');
+    assert.equal(r.state, 'sold');
+    assert.equal(r.amount, 230);
+  });
+
+  it('one pick on a multi level is just that price', () => {
+    const r = lookupPriceTree(modules, selMulti({ module: ['glass'] }), 'USD');
+    assert.equal(r.state, 'sold');
+    assert.equal(r.amount, 180);
+  });
+
+  it('nothing picked is incomplete, naming the level', () => {
+    const r = lookupPriceTree(modules, selMulti({ module: [] }), 'USD');
+    assert.equal(r.state, 'incomplete');
+    assert.deepEqual(r.missingAxes, ['module']);
+  });
+
+  it('a value the level never offers is not sold', () => {
+    const r = lookupPriceTree(modules, selMulti({ module: ['shoe', 'nope'] }), 'USD');
+    assert.equal(r.state, 'not_sold');
+  });
+
+  it('multiSelectGroupCodes names the multi levels and nothing else', () => {
+    assert.deepEqual([...multiSelectGroupCodes(modules)], ['module']);
+    assert.equal(multiSelectGroupCodes(buildTree()).size, 0);
+  });
+
+  // A root MULTI level whose branches continue to a SHARED next question: each
+  // picked branch is priced down the shared answer and the totals are summed.
+  function nestedTree(): PriceTreeNodeDef[] {
+    const nodes: PriceTreeNodeDef[] = [];
+    const ply = { ...node(null, 'material', 'ply'), multiSelect: true };
+    const walnut = { ...node(null, 'material', 'walnut'), multiSelect: true };
+    nodes.push(ply, walnut);
+    nodes.push(node(ply.id, 'tiers', 't3', 100), node(ply.id, 'tiers', 't5', 130));
+    nodes.push(node(walnut.id, 'tiers', 't3', 200), node(walnut.id, 'tiers', 't5', 260));
+    return nodes;
+  }
+  const nested = nestedTree();
+
+  it('sums each picked branch down the shared follow-up answer', () => {
+    const r = lookupPriceTree(nested, selMulti({ material: ['ply', 'walnut'], tiers: ['t5'] }), 'USD');
+    assert.equal(r.state, 'sold');
+    assert.equal(r.amount, 390); // 130 + 260
+  });
+
+  it('offers a shared follow-up only where every picked branch allows it', () => {
+    // ply offers {t3,t5}; a walnut with only {t3} would intersect to {t3}.
+    const partial: PriceTreeNodeDef[] = [
+      { ...node(null, 'material', 'ply'), multiSelect: true },
+      { ...node(null, 'material', 'oak'), multiSelect: true },
+    ];
+    const plyId = partial[0].id;
+    const oakId = partial[1].id;
+    partial.push(node(plyId, 'tiers', 't3', 100), node(plyId, 'tiers', 't5', 130));
+    partial.push(node(oakId, 'tiers', 't3', 150)); // oak has no t5
+    const avail = treeOptionAvailability(partial, selMulti({ material: ['ply', 'oak'] }));
+    const tiers = avail.get('tiers');
+    assert.ok(tiers instanceof Set);
+    assert.deepEqual([...(tiers as Set<string>)].sort(), ['t3']);
   });
 });

@@ -1,6 +1,7 @@
 import { evaluateCondition, isSatisfied, type ConditionScope } from './condition';
 import { evaluateFormula, referencedVariables } from './formula';
 import { lookupGrid, selectedVariantCode, variantByCode } from './grid';
+import { treeOptionAvailability } from './tree';
 import {
   activeEffects,
   allowedValues,
@@ -178,6 +179,12 @@ export function resolveConfiguration(
   const upgrades = upgradesForVariant(template.upgrades ?? [], variantCode);
   const effects = activeEffects(upgrades, picked, selection, quantity);
 
+  // When the variant is priced by a decision tree, the tree — not a per-value
+  // condition — is the authority on which values each of its questions offers
+  // on the chosen branch. This keeps the quote dropdowns identical to the
+  // canvas (edge=pur offers only board=spc, 55 mm has no PUR edge at all).
+  const treeAvail = treeOptionAvailability(variant?.priceTree, selection);
+
   const ordered = [...forVariant].sort((a, b) => a.sortOrder - b.sortOrder);
 
   for (const option of ordered) {
@@ -192,13 +199,20 @@ export function resolveConfiguration(
     // the value's own condition, and it can only ever remove — an effect must
     // not resurrect a value the tree already ruled out.
     const sorted = [...option.values].sort((a, b) => a.sortOrder - b.sortOrder);
+    // A value the chosen branch does not offer is not "disabled": on a decision
+    // tree it is simply not part of this branch of the door, so it is dropped
+    // rather than greyed. A tree question whose branch is not reached yet keeps
+    // its values but marks them pending (the earlier answer is still missing).
+    const treeState = treeAvail.get(option.groupCode);
+    const branchValues =
+      treeState instanceof Set ? sorted.filter((v) => treeState.has(v.code)) : sorted;
     const permitted = allowedValues(
       effects,
       option.groupCode,
-      sorted.map((v) => v.code),
+      branchValues.map((v) => v.code),
     );
-    const values = sorted.map((value) => {
-      const own = evaluateCondition(value.condition, scope);
+    const values = branchValues.map((value) => {
+      const own = treeState === 'pending' ? ('pending' as const) : evaluateCondition(value.condition, scope);
       const availability = own === 'yes' && !permitted.includes(value.code) ? 'no' : own;
       return {
         code: value.code,
@@ -358,7 +372,9 @@ export function cascadeSelection(
   quantity = 1,
 ): Selection {
   const next: Selection = { ...selection };
-  const ordered = [...optionsForVariant(template, selectedVariantCode(selection))].sort(
+  const variantCode = selectedVariantCode(next);
+  const treeNodes = variantByCode(template.variants ?? [], variantCode)?.priceTree ?? null;
+  const ordered = [...optionsForVariant(template, variantCode)].sort(
     (a, b) => a.sortOrder - b.sortOrder,
   );
 
@@ -375,9 +391,21 @@ export function cascadeSelection(
 
     if (option.inputKind === 'number' || option.inputKind === 'boolean') continue;
 
+    // The decision tree is the authority on which values a branch offers. A
+    // value the new path no longer reaches is cleared the same as one a
+    // condition ruled out — so changing the edge to PUR drops a board that only
+    // the silent-edge branch ever had, instead of leaving it to price nothing.
+    const treeState =
+      treeNodes && treeNodes.length ? treeOptionAvailability(treeNodes, next).get(option.groupCode) : undefined;
+    if (treeState === 'pending') {
+      delete next[option.groupCode];
+      continue;
+    }
+
     const stillAvailable = entry.valueCodes.filter((code) => {
       const value = option.values.find((v) => v.code === code);
       if (!value) return false;
+      if (treeState instanceof Set && !treeState.has(code)) return false;
       return evaluateCondition(value.condition, scope) === 'yes';
     });
 

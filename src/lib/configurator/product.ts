@@ -1,3 +1,4 @@
+import { priceAddons, type AddonLine, type AddonSelection } from './addons';
 import { lookupGrid, selectedVariantCode, variantByCode, withVariant } from './grid';
 import { lookupPriceTree } from './tree';
 import { priceConfiguration, type PriceResult, type PriceSeed, type PriceSeedLine } from './price';
@@ -34,6 +35,8 @@ export type ProductPriceResult = PriceResult & {
   grid: GridLookup;
   bandLines: BandLine[];
   upgradeLines: UpgradeLine[];
+  /** Canvas add-ons charged onto the line (priced straight from the tree). */
+  addonLines: AddonLine[];
   /** Measurements that fell through every band — a hole in the price list. */
   unbanded: string[];
   /** True when a base price was actually found. */
@@ -45,6 +48,8 @@ export type PriceProductInput = {
   selection: Selection;
   /** Upgrade code -> quantity. Absent or 0 means not chosen. */
   picked?: UpgradeSelection;
+  /** Canvas add-on id -> quantity. Absent or 0 means not chosen. */
+  pickedAddons?: AddonSelection;
   quantity?: number;
   /** Product-scoped rules that override the template's by code. */
   extraRules?: PricingRuleDef[];
@@ -53,7 +58,14 @@ export type PriceProductInput = {
 export { selectedVariantCode, withVariant };
 
 export function priceProduct(input: PriceProductInput): ProductPriceResult {
-  const { template, selection, picked = {}, quantity = 1, extraRules = [] } = input;
+  const {
+    template,
+    selection,
+    picked = {},
+    pickedAddons = {},
+    quantity = 1,
+    extraRules = [],
+  } = input;
 
   const variantCode = selectedVariantCode(selection);
   const variant = variantByCode(template.variants ?? [], variantCode);
@@ -72,8 +84,23 @@ export function priceProduct(input: PriceProductInput): ProductPriceResult {
   const upgrades = upgradesForVariant(template.upgrades ?? [], variantCode);
   const upgradeResult = priceUpgrades(upgrades, picked, selection, derived, quantity);
 
+  // Canvas add-ons priced straight from the tree. During the migration only the
+  // FLAT, non-colour add-ons are charged here (colours are a question, sizes are
+  // still bands, option-tree add-ons follow next); each is offered only on the
+  // branches its canvas attachment hangs on.
+  const addonDefs = template.extrasFromCanvas
+    ? (variant?.addons ?? []).filter((a) => a.colorHex === null && a.nodes.length === 0)
+    : [];
+  const addonResult = priceAddons(
+    addonDefs,
+    pickedAddons,
+    variant?.priceTree,
+    selection,
+    variant?.grid?.currency ?? template.currency,
+  );
+
   const seed: PriceSeed = {};
-  const issues: string[] = [...bandResult.issues, ...upgradeResult.issues];
+  const issues: string[] = [...bandResult.issues, ...upgradeResult.issues, ...addonResult.issues];
 
   if (grid.state === 'sold' && grid.amount !== null) {
     const label = variant ? `${variant.name} — base` : 'Base';
@@ -105,6 +132,14 @@ export function priceProduct(input: PriceProductInput): ProductPriceResult {
       source: 'upgrade',
     });
   }
+  for (const line of addonResult.lines) {
+    adders.push({
+      code: `addon_${line.addonId}`,
+      label: line.quantity > 1 ? `${line.name} × ${line.quantity}` : line.name,
+      amount: line.amount,
+      source: 'addon',
+    });
+  }
   if (adders.length) seed.adder = adders;
 
   const unbanded = unbandedMeasurements(bands, selection);
@@ -126,6 +161,7 @@ export function priceProduct(input: PriceProductInput): ProductPriceResult {
     grid,
     bandLines: bandResult.lines,
     upgradeLines: upgradeResult.lines,
+    addonLines: addonResult.lines,
     unbanded,
     // `no_grid` is priceable. A template that has no grid is priced entirely
     // by its rules — which is every template that existed before grids did —
