@@ -8,6 +8,8 @@ import { getFacetOptions } from '@/lib/catalogAdmin';
 import { productMediaUrl } from '@/lib/media';
 import ProductsToolbar from './ProductsToolbar';
 import ProductsTable, { type ProductRow } from './ProductsTable';
+import ProductsGrid from './ProductsGrid';
+import ReviewTour from './ReviewTour';
 
 type SP = Record<string, string | undefined>;
 
@@ -63,6 +65,12 @@ function buildWhere(sp: SP): Prisma.ProductWhereInput {
   if (sp.priced === 'yes') and.push({ price: { gt: 0 } });
   if (sp.featured === '1') and.push({ featuredRank: { not: null } });
   if (sp.noname === '1') and.push({ translations: { none: { localeCode: 'en' } } });
+  if (sp.nomat === '1') and.push({ materialId: null });
+  if (sp.notype === '1') and.push({ typeId: null });
+  if (sp.noroom === '1') and.push({ applications: { none: {} } });
+  if (sp.review === 'new' || sp.review === 'reviewed' || sp.review === 'ask_client') {
+    and.push({ reviewStatus: sp.review });
+  }
 
   if (and.length) where.AND = and;
   return where;
@@ -114,6 +122,7 @@ export default async function DashboardProductsPage({ searchParams }: { searchPa
     hasImage: p._count.images > 0,
     sourceCode: p.source.code,
     typeName: p.type ? (p.type.translations[0]?.name ?? p.type.code) : '',
+    reviewStatus: p.reviewStatus,
     updated: dateFmt.format(p.updatedAt),
   }));
 
@@ -126,6 +135,13 @@ export default async function DashboardProductsPage({ searchParams }: { searchPa
     const s = params.toString();
     return `/dashboard/products${s ? `?${s}` : ''}`;
   };
+
+  // Carry the current filters into a review session (status is forced to
+  // not-reviewed there, so review/pub/avail/etc. are dropped).
+  const reviewParams = new URLSearchParams();
+  const CARRY = ['q', 'source', 'type', 'look', 'material', 'collection', 'img', 'noname', 'nomat'];
+  for (const [k, v] of Object.entries(sp)) if (v && CARRY.includes(k)) reviewParams.set(k, v);
+  const reviewHref = `/dashboard/products/review${reviewParams.toString() ? `?${reviewParams}` : ''}`;
 
   const tabCls = (on: boolean) => `px-3 py-2 text-sm ${on ? 'bg-accent-2/15 text-heading font-medium' : 'text-ink hover:bg-accent-2/10'}`;
 
@@ -144,6 +160,12 @@ export default async function DashboardProductsPage({ searchParams }: { searchPa
               Cards
             </Link>
           </div>
+          <ReviewTour />
+          {canWrite && (
+            <Link href={reviewHref} className="px-4 py-2 rounded-lg border border-accent text-accent hover:bg-accent-2/10 text-sm whitespace-nowrap">
+              ▶ Review session
+            </Link>
+          )}
           {canWrite && (
             <Link href="/dashboard/products/new" className="px-4 py-2 rounded-lg bg-brand-brown hover:bg-brand-brown-hover text-white text-sm whitespace-nowrap">
               + New product
@@ -157,38 +179,9 @@ export default async function DashboardProductsPage({ searchParams }: { searchPa
       </Suspense>
 
       {view === 'cards' ? (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-          {rows.map((row) => (
-            <Link
-              key={row.id}
-              href={`/dashboard/products/${row.id}/edit`}
-              className="group bg-surface rounded-lg overflow-hidden border border-line hover:border-accent/60 transition-colors"
-            >
-              <div className="relative aspect-square bg-surface-2">
-                {row.thumb ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={row.thumb} alt="" loading="lazy" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full grid place-items-center text-muted text-xs">No image</div>
-                )}
-                <span
-                  title={row.isPublished ? 'Published' : 'Unpublished'}
-                  className={`absolute top-2 end-2 w-2.5 h-2.5 rounded-full ${row.isPublished ? 'bg-green-500' : 'bg-line-strong'}`}
-                />
-              </div>
-              <div className="p-3">
-                <p className="text-ink text-sm font-medium truncate" title={row.name}>
-                  {row.name}
-                </p>
-                <p className="text-muted text-xs mt-0.5 truncate">{row.code ?? '—'}</p>
-                <p className="text-heading text-sm mt-1">{row.price ? `${row.price} ${row.priceUnit}` : '—'}</p>
-              </div>
-            </Link>
-          ))}
-          {rows.length === 0 && <p className="text-muted py-10">No products match these filters.</p>}
-        </div>
+        <ProductsGrid key={JSON.stringify(sp)} rows={rows} canWrite={canWrite} />
       ) : (
-        <ProductsTable key={JSON.stringify(sp)} rows={rows} sources={facets.sources} canWrite={canWrite} />
+        <ProductsTable key={JSON.stringify(sp)} rows={rows} facets={facets} canWrite={canWrite} />
       )}
 
       {totalPages > 1 && (

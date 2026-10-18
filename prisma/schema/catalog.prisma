@@ -335,6 +335,10 @@ model Product {
   isAvailable      Boolean @default(true) @map("is_available")
   isPublished      Boolean @default(true) @map("is_published")
   featuredRank     Int?    @map("featured_rank")
+  // Catalog-review workflow (dashboard "Review Session"): every product is
+  // 'new' (not reviewed), 'reviewed', or 'ask_client' (parked for the client).
+  reviewStatus     String    @default("new") @map("review_status")
+  reviewedAt       DateTime? @map("reviewed_at") @db.Timestamptz(6)
   supplierUrl      String? @map("supplier_url")
   legacyMeta       Json?   @map("legacy_meta") // Shopify leftovers: tags[], description_paragraphs, filter_*
 
@@ -387,6 +391,7 @@ model Product {
   @@index([finishId])
   @@index([collectionId])
   @@index([isPublished, typeId])
+  @@index([reviewStatus])
   @@map("products")
 }
 

@@ -3,15 +3,10 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { FacetOption } from '@/lib/catalogAdmin';
-import {
-  saveProductRow,
-  setProductPublished,
-  bulkSetPublished,
-  bulkSetSource,
-  bulkSetFeatured,
-  bulkDeleteProducts,
-} from './actions';
+import type { FacetOptions } from '@/lib/catalogAdmin';
+import { saveProductRow, setProductPublished } from './actions';
+import { REVIEW_BADGE } from './reviewUi';
+import BulkBar from './BulkBar';
 
 export type ProductRow = {
   id: string;
@@ -26,6 +21,7 @@ export type ProductRow = {
   hasImage: boolean;
   sourceCode: string;
   typeName: string;
+  reviewStatus: string;
   updated: string;
 };
 
@@ -34,19 +30,14 @@ const cellInput =
 
 export default function ProductsTable({
   rows,
-  sources,
   canWrite,
 }: {
   rows: ProductRow[];
-  sources: FacetOption[];
+  // facets kept for API symmetry with the grid; the bulk bar no longer needs them.
+  facets?: FacetOptions;
   canWrite: boolean;
 }) {
-  const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [pending, start] = useTransition();
-  const [bulkSource, setBulkSource] = useState('');
-  const [bulkFeatured, setBulkFeatured] = useState('');
-  const [confirmDel, setConfirmDel] = useState(false);
 
   const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const toggleAll = () =>
@@ -64,72 +55,12 @@ export default function ProductsTable({
       return next;
     });
 
-  const ids = () => Array.from(selected);
-  const runBulk = (fn: () => Promise<void>, keepSelection = false) =>
-    start(async () => {
-      await fn();
-      if (!keepSelection) setSelected(new Set());
-      router.refresh();
-    });
-
-  const deleteSelected = () => {
-    setConfirmDel(false);
-    runBulk(() => bulkDeleteProducts(ids()));
-  };
-
   const colCount = canWrite ? 11 : 8;
 
   return (
     <div className="space-y-3">
       {canWrite && selected.size > 0 && (
-        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent-2/10 px-3 py-2 text-sm backdrop-blur">
-          <span className="font-medium text-heading">{selected.size} selected</span>
-          <button type="button" disabled={pending} onClick={() => runBulk(() => bulkSetPublished(ids(), true))} className="rounded border border-line px-2 py-1 text-ink hover:border-accent/60">
-            Publish
-          </button>
-          <button type="button" disabled={pending} onClick={() => runBulk(() => bulkSetPublished(ids(), false))} className="rounded border border-line px-2 py-1 text-ink hover:border-accent/60">
-            Unpublish
-          </button>
-
-          <span className="mx-1 h-5 w-px bg-line" />
-          <select value={bulkSource} onChange={(e) => setBulkSource(e.target.value)} className={cellInput} aria-label="Bulk source">
-            <option value="">Set source…</option>
-            {sources.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <button type="button" disabled={pending || !bulkSource} onClick={() => runBulk(() => bulkSetSource(ids(), bulkSource))} className="rounded border border-line px-2 py-1 text-ink hover:border-accent/60 disabled:opacity-40">
-            Apply
-          </button>
-
-          <span className="mx-1 h-5 w-px bg-line" />
-          <input value={bulkFeatured} onChange={(e) => setBulkFeatured(e.target.value)} placeholder="rank" type="number" min="0" className={`${cellInput} w-20`} aria-label="Bulk featured rank" />
-          <button type="button" disabled={pending} onClick={() => runBulk(() => bulkSetFeatured(ids(), bulkFeatured === '' ? null : Number(bulkFeatured)))} className="rounded border border-line px-2 py-1 text-ink hover:border-accent/60">
-            Set featured
-          </button>
-
-          <span className="mx-1 h-5 w-px bg-line" />
-          {confirmDel ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="text-xs text-red-300">Delete {selected.size}? This can&rsquo;t be undone.</span>
-              <button type="button" disabled={pending} onClick={deleteSelected} className="rounded border border-red-500/50 px-2 py-1 text-red-300 hover:bg-red-500/10">
-                Yes, delete
-              </button>
-              <button type="button" onClick={() => setConfirmDel(false)} className="rounded border border-line px-2 py-1 text-ink hover:border-accent/60">
-                Cancel
-              </button>
-            </span>
-          ) : (
-            <button type="button" disabled={pending} onClick={() => setConfirmDel(true)} className="rounded border border-red-500/50 px-2 py-1 text-red-300 hover:bg-red-500/10">
-              Delete
-            </button>
-          )}
-          <button type="button" onClick={() => setSelected(new Set())} className="ms-auto text-muted hover:text-ink">
-            Clear
-          </button>
-        </div>
+        <BulkBar ids={Array.from(selected)} onDone={() => setSelected(new Set())} />
       )}
 
       <div className="overflow-x-auto">
@@ -156,7 +87,7 @@ export default function ProductsTable({
           <tbody>
             {rows.map((row) => (
               <Row
-                key={`${row.id}:${row.price}:${row.priceUnit}:${row.featuredRank}:${row.isPublished}:${row.sourceCode}`}
+                key={`${row.id}:${row.price}:${row.priceUnit}:${row.featuredRank}:${row.isPublished}:${row.reviewStatus}`}
                 row={row}
                 canWrite={canWrite}
                 selected={selected.has(row.id)}
@@ -194,7 +125,11 @@ function Row({
   const [unit, setUnit] = useState(row.priceUnit);
   const [featured, setFeatured] = useState(row.featuredRank);
 
-  const dirty = canWrite && (price !== (row.price ? String(row.price) : '') || unit !== row.priceUnit || featured !== row.featuredRank);
+  const dirty =
+    canWrite &&
+    (price !== (row.price ? String(row.price) : '') ||
+      unit !== row.priceUnit ||
+      featured !== row.featuredRank);
 
   const save = () =>
     start(async () => {
@@ -211,6 +146,8 @@ function Row({
       await setProductPublished(row.id, !row.isPublished);
       router.refresh();
     });
+
+  const badge = REVIEW_BADGE[row.reviewStatus];
 
   return (
     <tr className={`border-b border-line/50 hover:bg-surface/60 ${selected ? 'bg-accent-2/5' : ''}`}>
@@ -239,6 +176,11 @@ function Row({
           <span className={`inline-block w-2 h-2 rounded-full ${row.isPublished ? 'bg-green-500' : 'bg-line-strong'}`} />
           <span className="truncate max-w-[16rem]">{row.name}</span>
         </button>
+        {badge && (
+          <span className={`ms-2 align-middle text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
+            {badge.label}
+          </span>
+        )}
       </td>
       <td className="py-2 pe-3 text-muted whitespace-nowrap">{row.sourceCode}</td>
       <td className="py-2 pe-3 text-muted whitespace-nowrap">{row.typeName || '—'}</td>

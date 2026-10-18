@@ -27,14 +27,27 @@ const SORTS: { value: string; label: string }[] = [
   { value: 'code', label: 'Code A–Z' },
 ];
 
-const CHIPS: { key: string; value: string; label: string }[] = [
+const CHIPS: { key: string; value: string; label: string; tone?: 'green' | 'red' | 'yellow' }[] = [
   { key: 'pub', value: 'no', label: 'Unpublished' },
   { key: 'avail', value: 'no', label: 'Out of stock' },
   { key: 'img', value: 'no', label: 'No image' },
   { key: 'priced', value: 'no', label: 'No price' },
   { key: 'featured', value: '1', label: 'Featured' },
   { key: 'noname', value: '1', label: 'Missing name' },
+  { key: 'nomat', value: '1', label: 'No material' },
+  { key: 'notype', value: '1', label: 'No category' },
+  { key: 'noroom', value: '1', label: 'No room' },
+  { key: 'review', value: 'new', label: 'Not reviewed', tone: 'red' },
+  { key: 'review', value: 'reviewed', label: 'Reviewed', tone: 'green' },
+  { key: 'review', value: 'ask_client', label: 'Ask client', tone: 'yellow' },
 ];
+
+// Active-state colour for the review-status chips.
+const CHIP_TONE: Record<string, string> = {
+  green: 'border-green-500 text-green-700 bg-green-500/10',
+  red: 'border-red-500 text-red-700 bg-red-500/10',
+  yellow: 'border-yellow-500 text-yellow-700 bg-yellow-500/20',
+};
 
 const FACET_KEYS = ['source', 'type', 'material', 'look', 'color', 'brand', 'collection'] as const;
 const FACET_LABEL: Record<(typeof FACET_KEYS)[number], string> = {
@@ -151,7 +164,11 @@ export default function ProductsToolbar({ facets, total }: { facets: ToolbarFace
               type="button"
               onClick={() => toggleChip(c.key, c.value)}
               className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                active ? 'border-accent text-heading bg-accent-2/15' : 'border-line text-ink hover:border-accent/60'
+                active
+                  ? c.tone
+                    ? CHIP_TONE[c.tone]
+                    : 'border-accent text-heading bg-accent-2/15'
+                  : 'border-line text-ink hover:border-accent/60'
               }`}
             >
               {c.label}

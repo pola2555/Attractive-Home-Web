@@ -885,6 +885,128 @@ export async function deleteProduct(productId: string): Promise<void> {
   redirect('/dashboard/products');
 }
 
+// ---------------------------------------------------------------------------
+// Review workflow — the dashboard "Review Session" (one product at a time)
+// ---------------------------------------------------------------------------
+
+const reviewStatusSchema = z.enum(['new', 'reviewed', 'ask_client']);
+
+export async function setReviewStatus(productId: string, status: string): Promise<void> {
+  const user = await requirePermission('catalog.write');
+  const s = reviewStatusSchema.safeParse(status);
+  if (!s.success || !z.string().uuid().safeParse(productId).success) return;
+  const p = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { id: true, legacyId: true, reviewStatus: true },
+  });
+  if (!p || p.reviewStatus === s.data) return;
+  await prisma.product.update({
+    where: { id: productId },
+    data: { reviewStatus: s.data, reviewedAt: s.data === 'reviewed' ? new Date() : null },
+  });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: p.legacyId ?? p.id,
+    action: 'update',
+    diff: { review_status: { from: p.reviewStatus, to: s.data } },
+  });
+  revalidatePath('/dashboard/products');
+}
+
+const reviewEditSchema = z.object({
+  name: z.string().trim().min(1, 'A name is required.').max(300),
+  typeId: z.string().uuid().nullable(),
+  lookId: z.string().uuid().nullable(),
+  materialId: z.string().uuid().nullable(),
+  collectionId: z.string().uuid().nullable(),
+  applicationIds: z.array(z.string().uuid()).max(50),
+  // Optional full image list (order matters; index 0 is the cover). An s3Key
+  // that starts with http(s) is an absolute URL the app renders as-is, so
+  // images added by URL in the session persist without touching S3.
+  images: z.array(z.object({ s3Key: z.string().trim().min(1).max(1000) })).max(30).optional(),
+});
+
+// Save the fields the review session edits (EN name + category facets + rooms),
+// then optionally set the review status in the same step.
+export async function saveReviewProduct(
+  productId: string,
+  input: unknown,
+  nextStatus?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requirePermission('catalog.write');
+  if (!z.string().uuid().safeParse(productId).success) return { ok: false, error: 'Bad id' };
+  const parsed = reviewEditSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
+  const d = parsed.data;
+  const status = nextStatus ? reviewStatusSchema.safeParse(nextStatus) : null;
+
+  const existing = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { id: true, legacyId: true },
+  });
+  if (!existing) return { ok: false, error: 'Product not found.' };
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id: productId },
+        data: {
+          typeId: d.typeId,
+          lookId: d.lookId,
+          materialId: d.materialId,
+          collectionId: d.collectionId,
+          ...(status?.success
+            ? {
+                reviewStatus: status.data,
+                reviewedAt: status.data === 'reviewed' ? new Date() : null,
+              }
+            : {}),
+        },
+      });
+      const en = await tx.productTranslation.findFirst({
+        where: { productId, localeCode: 'en' },
+        select: { id: true },
+      });
+      if (en) {
+        await tx.productTranslation.update({ where: { id: en.id }, data: { name: d.name } });
+      } else {
+        await tx.productTranslation.create({
+          data: { id: uuidv7(), productId, localeCode: 'en', name: d.name },
+        });
+      }
+      await tx.productApplication.deleteMany({ where: { productId } });
+      if (d.applicationIds.length) {
+        await tx.productApplication.createMany({
+          data: d.applicationIds.map((applicationId) => ({ productId, applicationId })),
+          skipDuplicates: true,
+        });
+      }
+      // Replace the gallery when the session sent one (reorder / remove / add).
+      if (d.images) {
+        await tx.productImage.deleteMany({ where: { productId } });
+        if (d.images.length) {
+          await tx.productImage.createMany({
+            data: d.images.map((im, i) => ({ id: uuidv7(), productId, sortOrder: i, s3Key: im.s3Key })),
+          });
+        }
+      }
+    });
+  } catch (err) {
+    return { ok: false, error: writeErrorMessage(err) };
+  }
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: existing.legacyId ?? existing.id,
+    action: 'update',
+    diff: { reviewed_edit: { from: null, to: status?.success ? status.data : 'saved' } },
+  });
+  revalidatePath('/dashboard/products');
+  return { ok: true };
+}
+
 // Translate the few expected Prisma write failures into human messages.
 function writeErrorMessage(err: unknown): string {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -1031,6 +1153,116 @@ export async function bulkSetFeatured(ids: string[], rank: number | null): Promi
     entityId: `${res.count} products`,
     action: 'update',
     diff: { featured_rank: { from: null, to: value } },
+  });
+  revalidatePath('/dashboard/products');
+}
+
+// Bulk-set a single scalar facet (type/material/look/collection/color/finish/
+// brand) across the selection. An empty valueId clears the facet (→ NULL).
+const FACET_COLUMN = {
+  type: 'typeId',
+  material: 'materialId',
+  look: 'lookId',
+  collection: 'collectionId',
+  color: 'colorId',
+  finish: 'finishId',
+  brand: 'brandId',
+} as const;
+type FacetKey = keyof typeof FACET_COLUMN;
+
+async function facetCode(field: FacetKey, id: string): Promise<string | null> {
+  const sel = { where: { id }, select: { code: true } };
+  switch (field) {
+    case 'type': return (await prisma.productType.findUnique(sel))?.code ?? null;
+    case 'material': return (await prisma.material.findUnique(sel))?.code ?? null;
+    case 'look': return (await prisma.look.findUnique(sel))?.code ?? null;
+    case 'collection': return (await prisma.collection.findUnique(sel))?.code ?? null;
+    case 'color': return (await prisma.color.findUnique(sel))?.code ?? null;
+    case 'finish': return (await prisma.finish.findUnique(sel))?.code ?? null;
+    case 'brand': return (await prisma.brand.findUnique(sel))?.code ?? null;
+  }
+}
+
+export async function bulkSetFacet(ids: string[], field: string, valueId: string): Promise<void> {
+  const user = await requirePermission('catalog.write');
+  const clean = idsSchema.safeParse(ids);
+  if (!clean.success || !(field in FACET_COLUMN)) return;
+  const key = field as FacetKey;
+
+  let value: string | null = null;
+  let code = '(cleared)';
+  if (valueId) {
+    if (!z.string().uuid().safeParse(valueId).success) return;
+    const c = await facetCode(key, valueId);
+    if (!c) return; // unknown value — do nothing rather than null the facet
+    value = valueId;
+    code = c;
+  }
+
+  const data: Prisma.ProductUncheckedUpdateManyInput = {};
+  data[FACET_COLUMN[key]] = value;
+  const res = await prisma.product.updateMany({ where: { id: { in: clean.data } }, data });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: `${res.count} products`,
+    action: 'update',
+    diff: { [field]: { from: null, to: code } },
+  });
+  revalidatePath('/dashboard/products');
+}
+
+// Bulk add / remove a room-or-use tag (application, a many-to-many join).
+export async function bulkSetApplication(
+  ids: string[],
+  applicationId: string,
+  add: boolean,
+): Promise<void> {
+  const user = await requirePermission('catalog.write');
+  const clean = idsSchema.safeParse(ids);
+  if (!clean.success || !z.string().uuid().safeParse(applicationId).success) return;
+  const app = await prisma.application.findUnique({
+    where: { id: applicationId },
+    select: { code: true },
+  });
+  if (!app) return;
+
+  if (add) {
+    await prisma.productApplication.createMany({
+      data: clean.data.map((productId) => ({ productId, applicationId })),
+      skipDuplicates: true,
+    });
+  } else {
+    await prisma.productApplication.deleteMany({
+      where: { productId: { in: clean.data }, applicationId },
+    });
+  }
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: `${clean.data.length} products`,
+    action: 'update',
+    diff: { application: add ? { from: null, to: app.code } : { from: app.code, to: null } },
+  });
+  revalidatePath('/dashboard/products');
+}
+
+// Move the selection between review lists (not reviewed / reviewed / ask client).
+export async function bulkSetReviewStatus(ids: string[], status: string): Promise<void> {
+  const user = await requirePermission('catalog.write');
+  const clean = idsSchema.safeParse(ids);
+  const s = reviewStatusSchema.safeParse(status);
+  if (!clean.success || !s.success) return;
+  const res = await prisma.product.updateMany({
+    where: { id: { in: clean.data } },
+    data: { reviewStatus: s.data, reviewedAt: s.data === 'reviewed' ? new Date() : null },
+  });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'product',
+    entityId: `${res.count} products`,
+    action: 'update',
+    diff: { review_status: { from: null, to: s.data } },
   });
   revalidatePath('/dashboard/products');
 }
