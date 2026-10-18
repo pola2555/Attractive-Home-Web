@@ -15,8 +15,16 @@ export const GOLD = '#C08B5C';
 
 export function Section({ tone: t, id, children }: { tone: Tone; id?: string; children: ReactNode }) {
   const c = TONES[t];
+  // The cream bands are "light" for the navbar: as the transparent bar scrolls
+  // over them, useNavSurface blends its colours dark so they stay readable.
+  const light = t === 'cream' || t === 'creamAlt';
   return (
-    <section id={id} style={{ backgroundColor: c.bg, color: c.body }} className="px-6 sm:px-10 lg:px-16 py-20 sm:py-24">
+    <section
+      id={id}
+      data-nav-surface={light ? 'light' : undefined}
+      style={{ backgroundColor: c.bg, color: c.body }}
+      className="px-6 sm:px-10 lg:px-16 py-20 sm:py-24"
+    >
       <div className="max-w-6xl mx-auto">{children}</div>
     </section>
   );

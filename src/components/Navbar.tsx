@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LOCALES, LOCALE_SHORT, type Locale } from '@/i18n/config';
 import { useFavorites } from './favorites/FavoritesProvider';
+import useNavSurface from './useNavSurface';
 
 // Ported from the old Navbar.jsx: transparent blurred bar, collapse-on-scroll
 // on the catalog page only, EN/AR logo variants, language pill dropdown.
@@ -37,8 +38,13 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
   const [langOpen, setLangOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
   const langRef = useRef<HTMLDivElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
   const lastYRef = useRef(0);
   const pathname = usePathname() ?? `/${locale}`;
+
+  // Blend the bar's colours dark as it scrolls over the cream home bands
+  // (marked data-nav-surface="light"); re-measures on route change.
+  useNavSurface(navRef, pathname);
   // Client-side auth flag (hydrates after mount, so the page stays static).
   const { authed } = useFavorites();
   // Staff-session check (also client-side) → controls the Dashboard link.
@@ -137,6 +143,7 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
 
   return (
     <nav
+      ref={navRef}
       className={`fixed top-0 w-full flex justify-between items-center px-4 sm:px-6 lg:px-10 py-5 z-[1000] text-ink transition-all duration-300 ${
         collapsed ? '-translate-y-full' : 'translate-y-0'
       } bg-transparent border-0 shadow-none`}
