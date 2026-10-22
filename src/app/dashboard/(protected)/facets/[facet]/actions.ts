@@ -12,8 +12,10 @@ import {
   deleteFacetValue,
   setFacetActive,
   moveFacetValue,
+  facetValueProducts,
   type FacetType,
   type FacetValueInput,
+  type FacetProductPreview,
 } from '@/lib/facetsAdmin';
 
 // Actions for the inline facet-values editor. Each returns a small result object
@@ -79,6 +81,15 @@ export async function saveFacetInline(
   });
   revalidatePath(`/dashboard/facets/${facet}`);
   return { ok: true };
+}
+
+// Read-only: up to 5 products using this facet value, for the "Uses" hover
+// preview. Gated by catalog.read (any dashboard viewer), lazy-called on hover.
+export async function previewFacetProducts(facet: string, id: string): Promise<FacetProductPreview[]> {
+  if (!isFacetType(facet)) return [];
+  await requirePermission('catalog.read');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return [];
+  return facetValueProducts(facet, id, 5);
 }
 
 export async function toggleFacet(facet: FacetType, id: string, next: boolean): Promise<InlineResult> {

@@ -2,6 +2,7 @@ import 'server-only';
 import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
+import { productMediaUrl } from './media';
 import { LOCALES, type Locale } from '@/i18n/config';
 
 // Generic admin for the ten identically-shaped facet lookups (docs/DATABASE.md
@@ -145,6 +146,52 @@ export async function facetCounts(): Promise<Record<FacetType, number>> {
     FACET_TYPES.map(async (t) => [t, await REGISTRY[t].model.count()] as const),
   );
   return Object.fromEntries(entries) as Record<FacetType, number>;
+}
+
+// Products that use a given facet value — for the hover preview on the "Uses"
+// cell. Query from the Product side (uniform, typed) via a per-facet WHERE: the
+// eight direct FKs, plus the two many-to-many relations (applications,
+// performance). Returns up to `limit` with a ready thumbnail URL.
+const PRODUCT_WHERE: Record<FacetType, (id: string) => Prisma.ProductWhereInput> = {
+  types: (id) => ({ typeId: id }),
+  materials: (id) => ({ materialId: id }),
+  looks: (id) => ({ lookId: id }),
+  colors: (id) => ({ colorId: id }),
+  finishes: (id) => ({ finishId: id }),
+  collections: (id) => ({ collectionId: id }),
+  brands: (id) => ({ brandId: id }),
+  sources: (id) => ({ sourceId: id }),
+  applications: (id) => ({ applications: { some: { applicationId: id } } }),
+  performance: (id) => ({ performance: { some: { performanceAttributeId: id } } }),
+};
+
+export type FacetProductPreview = { id: string; name: string; thumb: string | null };
+
+export async function facetValueProducts(
+  type: FacetType,
+  id: string,
+  limit = 5,
+): Promise<FacetProductPreview[]> {
+  const rows = await prisma.product.findMany({
+    where: PRODUCT_WHERE[type](id),
+    take: limit,
+    orderBy: [{ featuredRank: 'asc' }, { legacyId: 'asc' }],
+    select: {
+      id: true,
+      code: true,
+      translations: { where: { localeCode: 'en' }, select: { name: true } },
+      source: { select: { code: true } },
+      images: { where: { sortOrder: 0 }, take: 1, select: { s3Key: true, thumbKey: true } },
+    },
+  });
+  return rows.map((p) => {
+    const img = p.images[0];
+    return {
+      id: p.id,
+      name: p.translations[0]?.name ?? p.code ?? '—',
+      thumb: img ? productMediaUrl(img.thumbKey ?? img.s3Key, p.source.code) : null,
+    };
+  });
 }
 
 export type FacetValueEdit = {
