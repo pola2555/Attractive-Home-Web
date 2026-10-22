@@ -17,6 +17,10 @@
   "clearFilters": "Clear filters",
   "browse": "Browse the collection your way",
   "materialsLine": "{{total}} materials · Attractive Home {{ah}} + Catalog {{cat}}",
+  "shopByBrand": "Shop by Brand",
+  "brandOpen": "Browse",
+  "brandLoading": "Loading…",
+  "brandRetry": "Couldn't load — tap to retry",
   "facet": {
     "type": "Type",
     "material": "Material",

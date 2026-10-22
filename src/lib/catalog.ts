@@ -368,6 +368,65 @@ export async function shopRepImages(): Promise<{
   };
 }
 
+// Brand-scoped twin of shopRepImages(): one representative image per facet value,
+// but only among products of the given brand — for the "Shop by brand" rows, where
+// each brand opens to its own type/look/collection/application cards. The brand
+// condition is parameterised (a `Prisma.sql` fragment spliced into each query).
+export async function brandShopRepImages(brandCode: string): Promise<{
+  type: Map<string, RepImage>;
+  look: Map<string, RepImage>;
+  collection: Map<string, RepImage>;
+  application: Map<string, RepImage>;
+}> {
+  const toMap = (rows: RepRow[]) =>
+    new Map(
+      rows.map((r) => [r.value, { s3Key: r.s3_key, thumbKey: r.thumb_key, sourceCode: r.source_code }]),
+    );
+  const b = Prisma.sql`(SELECT id FROM brands WHERE code = ${brandCode})`;
+
+  const [types, looks, collections, applications] = await Promise.all([
+    prisma.$queryRaw<RepRow[]>`
+      SELECT DISTINCT ON (t.code) t.code AS value, pi.s3_key, pi.thumb_key, s.code AS source_code
+      FROM products p
+      JOIN product_types t ON t.id = p.type_id
+      JOIN product_images pi ON pi.product_id = p.id AND pi.sort_order = 0
+      JOIN sources s ON s.id = p.source_id
+      WHERE p.is_published = TRUE AND p.brand_id = ${b}
+      ORDER BY t.code, p.featured_rank ASC NULLS LAST, p.legacy_id`,
+    prisma.$queryRaw<RepRow[]>`
+      SELECT DISTINCT ON (l.code) l.code AS value, pi.s3_key, pi.thumb_key, s.code AS source_code
+      FROM products p
+      JOIN looks l ON l.id = p.look_id
+      JOIN product_images pi ON pi.product_id = p.id AND pi.sort_order = 0
+      JOIN sources s ON s.id = p.source_id
+      WHERE p.is_published = TRUE AND p.brand_id = ${b}
+      ORDER BY l.code, p.featured_rank ASC NULLS LAST, p.legacy_id`,
+    prisma.$queryRaw<RepRow[]>`
+      SELECT DISTINCT ON (c.code) c.code AS value, pi.s3_key, pi.thumb_key, s.code AS source_code
+      FROM products p
+      JOIN collections c ON c.id = p.collection_id
+      JOIN product_images pi ON pi.product_id = p.id AND pi.sort_order = 0
+      JOIN sources s ON s.id = p.source_id
+      WHERE p.is_published = TRUE AND p.brand_id = ${b}
+      ORDER BY c.code, p.featured_rank ASC NULLS LAST, p.legacy_id`,
+    prisma.$queryRaw<RepRow[]>`
+      SELECT DISTINCT ON (a.code) a.code AS value, pi.s3_key, pi.thumb_key, s.code AS source_code
+      FROM product_applications pa
+      JOIN applications a ON a.id = pa.application_id
+      JOIN products p ON p.id = pa.product_id AND p.is_published = TRUE AND p.brand_id = ${b}
+      JOIN product_images pi ON pi.product_id = p.id AND pi.sort_order = 0
+      JOIN sources s ON s.id = p.source_id
+      ORDER BY a.code, p.featured_rank ASC NULLS LAST, p.legacy_id`,
+  ]);
+
+  return {
+    type: toMap(types),
+    look: toMap(looks),
+    collection: toMap(collections),
+    application: toMap(applications),
+  };
+}
+
 // Display labels (English name / code) for picked products — for the editor UI.
 export async function pickProductLabels(productIds: string[]): Promise<Record<string, string>> {
   if (productIds.length === 0) return {};

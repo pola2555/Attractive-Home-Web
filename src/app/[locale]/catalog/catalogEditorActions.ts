@@ -18,6 +18,12 @@ import {
   normalizeShopBy,
   type ShopBySection,
 } from '@/lib/catalogShopByConfig';
+import {
+  BRANDSHOP_KEY,
+  brandShopSchema,
+  normalizeBrandShop,
+  type BrandRow,
+} from '@/lib/catalogBrandShopConfig';
 
 // Server action behind the in-context catalog editor. Same persistence as the
 // dashboard Catalog-filters screen (settings['catalog.filters']), but callable
@@ -93,6 +99,57 @@ export async function searchProductsForPick(q: string): Promise<PickResult[]> {
   }));
 }
 
+// Products that carry a given Shop-by facet value (by CODE), as image cards for
+// the cover-picker. Pre-populated when the picker opens (no search needed); `q`
+// optionally narrows within the facet value. Staff-only.
+const SHOP_PRODUCT_WHERE: Record<string, (code: string) => Prisma.ProductWhereInput> = {
+  type: (code) => ({ type: { code } }),
+  look: (code) => ({ look: { code } }),
+  collection: (code) => ({ collection: { code } }),
+  application: (code) => ({ applications: { some: { application: { code } } } }),
+  color: (code) => ({ color: { code } }),
+};
+
+export async function shopPickProducts(
+  sectionKey: string,
+  valueCode: string,
+  q?: string,
+): Promise<PickResult[]> {
+  await requirePermission('catalog.write');
+  const build = SHOP_PRODUCT_WHERE[sectionKey];
+  if (!build || !valueCode) return [];
+
+  const and: Prisma.ProductWhereInput[] = [{ isPublished: true }, build(valueCode)];
+  const term = (q ?? '').trim();
+  if (term) {
+    and.push({
+      OR: [
+        { code: { contains: term, mode: 'insensitive' } },
+        { translations: { some: { name: { contains: term, mode: 'insensitive' } } } },
+      ],
+    });
+  }
+
+  const rows = await prisma.product.findMany({
+    where: { AND: and },
+    take: 60,
+    orderBy: [{ featuredRank: 'asc' }, { legacyId: 'asc' }],
+    select: {
+      id: true,
+      code: true,
+      translations: { where: { localeCode: 'en' }, select: { name: true } },
+      source: { select: { code: true } },
+      images: { where: { sortOrder: 0 }, take: 1, select: { s3Key: true, thumbKey: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.translations[0]?.name ?? r.code ?? '',
+    code: r.code,
+    thumb: r.images[0] ? productMediaUrl(r.images[0].thumbKey ?? r.images[0].s3Key, r.source.code) : null,
+  }));
+}
+
 export async function saveShopByConfig(sections: ShopBySection[]): Promise<SaveResult> {
   const user = await requirePermission('catalog.write');
 
@@ -115,6 +172,36 @@ export async function saveShopByConfig(sections: ShopBySection[]): Promise<SaveR
       shopby: {
         from: null,
         to: normalized.map((s) => `${s.key}:${s.visible ? s.limit : 'hidden'}`).join(','),
+      },
+    },
+  });
+
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+export async function saveBrandShopConfig(rows: BrandRow[]): Promise<SaveResult> {
+  const user = await requirePermission('catalog.write');
+
+  const parsed = brandShopSchema.safeParse(rows);
+  if (!parsed.success) return { ok: false, error: 'The Shop-by-brand configuration is invalid.' };
+  const normalized = normalizeBrandShop(parsed.data);
+
+  await prisma.setting.upsert({
+    where: { key: BRANDSHOP_KEY },
+    update: { value: normalized as unknown as Prisma.InputJsonValue, updatedBy: user.id },
+    create: { key: BRANDSHOP_KEY, value: normalized as unknown as Prisma.InputJsonValue, updatedBy: user.id },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'settings',
+    entityId: BRANDSHOP_KEY,
+    action: 'update',
+    diff: {
+      shopbybrand: {
+        from: null,
+        to: normalized.map((r) => `${r.key}:${r.visible ? r.limit : 'hidden'}`).join(','),
       },
     },
   });

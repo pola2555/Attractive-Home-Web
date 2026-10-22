@@ -17,6 +17,10 @@
   "clearFilters": "Effacer les filtres",
   "browse": "Parcourez la collection à votre façon",
   "materialsLine": "{{total}} matériaux · Attractive Home {{ah}} + Catalogue {{cat}}",
+  "shopByBrand": "Acheter par marque",
+  "brandOpen": "Parcourir",
+  "brandLoading": "Chargement…",
+  "brandRetry": "Échec du chargement — toucher pour réessayer",
   "facet": {
     "type": "Type",
     "material": "Matériau",

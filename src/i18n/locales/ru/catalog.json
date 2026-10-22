@@ -17,6 +17,10 @@
   "clearFilters": "Сбросить фильтры",
   "browse": "Просматривайте коллекцию по-своему",
   "materialsLine": "{{total}} материалов · Attractive Home {{ah}} + Каталог {{cat}}",
+  "shopByBrand": "Покупки по бренду",
+  "brandOpen": "Смотреть",
+  "brandLoading": "Загрузка…",
+  "brandRetry": "Не удалось загрузить — нажмите, чтобы повторить",
   "facet": {
     "type": "Тип",
     "material": "Материал",

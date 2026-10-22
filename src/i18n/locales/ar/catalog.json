@@ -17,6 +17,10 @@
   "clearFilters": "مسح عوامل التصفية",
   "browse": "تصفّح المجموعة بطريقتك",
   "materialsLine": "{{total}} مادة · أتراكتيف هوم {{ah}} + الكتالوج {{cat}}",
+  "shopByBrand": "تسوّق حسب العلامة التجارية",
+  "brandOpen": "تصفّح",
+  "brandLoading": "جارٍ التحميل…",
+  "brandRetry": "تعذّر التحميل — انقر لإعادة المحاولة",
   "facet": {
     "type": "النوع",
     "material": "الخامة",

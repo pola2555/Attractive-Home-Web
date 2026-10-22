@@ -15,7 +15,9 @@ import {
   FACET_KEYS,
   type FacetKey,
   type CatalogSort,
+  type RepImage,
 } from '@/lib/catalog';
+import { productMediaUrl } from '@/lib/media';
 import { getCatalogFilterConfig } from '@/lib/catalogConfig';
 import {
   getShopByConfig,
@@ -23,12 +25,14 @@ import {
   SHOP_KEYS,
   type ShopKey,
 } from '@/lib/catalogShopByConfig';
+import { getBrandShopConfig } from '@/lib/catalogBrandShopConfig';
 import { alternates } from '@/lib/seo';
 import ProductCard from '@/components/ProductCard';
 import FiltersSidebar, { catalogHref } from './FiltersSidebar';
 import CatalogFilters from './CatalogFilters';
 import ShopByTiles from './ShopByTiles';
-import { CatalogEditProvider, FiltersSlot, ShopBySlot } from './CatalogEditor';
+import ShopByBrand from './ShopByBrand';
+import { CatalogEditProvider, FiltersSlot, ShopBySlot, BrandShopSlot } from './CatalogEditor';
 
 export async function generateMetadata({
   params,
@@ -61,14 +65,16 @@ export default async function CatalogPage({
   // Browse tiles only make sense on the unfiltered landing view.
   const showShopBy = !FACET_KEYS.some((k) => filters[k]?.length) && !filters.q;
 
-  const [dict, facets, { total, products }, reps, filterConfig, shopByConfig] = await Promise.all([
-    getDictionary(locale, 'catalog'),
-    facetValues(locale, filters),
-    queryProducts(locale, filters),
-    showShopBy ? shopRepImages() : Promise.resolve(null),
-    getCatalogFilterConfig(),
-    getShopByConfig(),
-  ]);
+  const [dict, facets, { total, products }, reps, filterConfig, shopByConfig, brandShopConfig] =
+    await Promise.all([
+      getDictionary(locale, 'catalog'),
+      facetValues(locale, filters),
+      queryProducts(locale, filters),
+      showShopBy ? shopRepImages() : Promise.resolve(null),
+      getCatalogFilterConfig(),
+      getShopByConfig(),
+      getBrandShopConfig(),
+    ]);
   const pickIds = pickedProductIds(shopByConfig);
   const [pickImages, pickLabels] = showShopBy
     ? await Promise.all([pickRepImages(pickIds), pickProductLabels(pickIds)])
@@ -85,6 +91,31 @@ export default async function CatalogPage({
     SHOP_KEYS.map((k) => [k, facets[k].map((v) => ({ code: v.code, name: v.name, count: v.count }))]),
   ) as Record<ShopKey, { code: string; name: string; count: number }[]>;
 
+  // Resolved cover images for the Shop-by editor so each card can SHOW its current
+  // cover thumbnail (and be the click-to-change target): the AUTO representative
+  // per facet value, plus the image of every already-picked product.
+  const shopAutoImages = { application: {}, look: {}, color: {}, type: {}, collection: {} } as Record<
+    ShopKey,
+    Record<string, string>
+  >;
+  const shopPickThumbs: Record<string, string> = {};
+  if (showShopBy && reps) {
+    const repByKey: Partial<Record<ShopKey, Map<string, RepImage>>> = {
+      type: reps.type,
+      look: reps.look,
+      collection: reps.collection,
+      application: reps.application,
+    };
+    for (const key of SHOP_KEYS) {
+      const repMap = repByKey[key];
+      if (!repMap) continue;
+      for (const [code, rep] of repMap) shopAutoImages[key][code] = productMediaUrl(rep.s3Key, rep.sourceCode);
+    }
+    for (const [pid, rep] of pickImages as Map<string, RepImage>) {
+      shopPickThumbs[pid] = productMediaUrl(rep.s3Key, rep.sourceCode);
+    }
+  }
+
   // Labels default to the i18n facet name; the admin config can override each.
   const baseFacetLabels = Object.fromEntries(
     FACET_KEYS.map((key) => [key, t(dict, `facet.${key}`)]),
@@ -95,6 +126,7 @@ export default async function CatalogPage({
     if (entry.label) facetLabels[entry.facetKey] = entry.label;
   }
   const activeCount = FACET_KEYS.filter((k) => filters[k]).length;
+  const brands = facets.brand.map((b) => ({ code: b.code, name: b.name, count: b.count }));
 
   const totalPages = Math.max(1, Math.ceil(total / filters.perPage));
   const page = Math.min(filters.page, totalPages);
@@ -111,7 +143,10 @@ export default async function CatalogPage({
       initialConfig={filterConfig}
       labels={baseFacetLabels}
       initialShopBy={shopByConfig}
+      initialBrandShop={brandShopConfig}
       shopFacets={shopFacets}
+      shopAutoImages={shopAutoImages}
+      shopPickThumbs={shopPickThumbs}
       shopLabels={shopLabels}
       pickLabels={pickLabels}
     >
@@ -138,6 +173,19 @@ export default async function CatalogPage({
             className="w-full px-4 py-2 bg-surface text-ink rounded-lg border border-line-strong focus:outline-none focus:ring-2 focus:ring-accent"
           />
         </form>
+
+        {showShopBy && (
+          <BrandShopSlot>
+            <ShopByBrand
+              locale={locale}
+              title={t(dict, 'shopByBrand')}
+              brands={brands}
+              openLabel={t(dict, 'brandOpen')}
+              loadingText={t(dict, 'brandLoading')}
+              retryText={t(dict, 'brandRetry')}
+            />
+          </BrandShopSlot>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[16rem_1fr] gap-10">
           <FiltersSlot>
