@@ -21,7 +21,9 @@ export async function generateMetadata({
   if (!isLocale(locale)) return {};
   const dict = await getDictionary(locale, 'portfolio');
   return {
-    title: t(dict, 'title'),
+    // Tab title in title case ("Portfolio | Attractive Home") — the i18n `title`
+    // is all-caps because it doubles as the big hero H1, so it's not reused here.
+    title: 'Portfolio',
     description: t(dict, 'mapSubtitle'),
     alternates: alternates(locale, '/portfolio'),
   };
@@ -51,8 +53,10 @@ export default async function PortfolioPage({ params }: { params: Promise<{ loca
   return (
     <section className="bg-bg text-on-media">
       {/* Hero — the video is scoped to this full-screen band so it can't stretch
-          behind the whole page (it previously filled the entire section). */}
-      <div className="relative overflow-hidden py-20 md:px-12 lg:px-24">
+          behind the whole page (it previously filled the entire section). No
+          bottom padding: the category tabs' mb-32 is the only gap before the
+          grid, matching the old site. */}
+      <div className="relative overflow-hidden pt-20 md:px-12 lg:px-24">
         <VideoPlayer
           videoUrl={siteMediaUrl('Main/Portfolio/master.m3u8')}
           showMuteButton={false}
@@ -119,8 +123,10 @@ export default async function PortfolioPage({ params }: { params: Promise<{ loca
         </div>
       </div>
 
-      {/* Project grid — on the page background, below the hero. */}
-      <div className="max-w-5xl mx-auto grid gap-24 md:grid-cols-2 px-6 md:px-12 lg:px-24 py-20">
+      {/* Project grid — on the page background, below the hero. Only a mobile
+          gutter + bottom padding: the extra md/lg horizontal padding narrowed
+          the cards inside max-w-5xl, squashing the 16:9 covers. */}
+      <div className="max-w-5xl mx-auto grid gap-24 md:grid-cols-2 px-6 pb-20">
         {projects.map((project) => {
           const tr = pickTranslation(project.translations, locale);
           if (!tr) return null;

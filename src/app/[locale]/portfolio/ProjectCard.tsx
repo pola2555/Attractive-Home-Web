@@ -29,7 +29,7 @@ export default function ProjectCard({
           {project.coverKey && project.coverType === 'video' ? (
             <VideoPlayer
               videoUrl={siteMediaUrl(project.coverKey)}
-              className="w-full h-64 object-cover"
+              className="w-full aspect-video object-cover"
               enableHoverPlay
               autoPlay={false}
               defaultMuted
@@ -39,10 +39,10 @@ export default function ProjectCard({
             <SmartImage
               src={siteMediaUrl(project.coverKey)}
               alt={project.title}
-              className="w-full h-64 object-cover"
+              className="w-full aspect-video object-cover"
             />
           ) : (
-            <div className="w-full h-64 bg-surface-2" aria-hidden="true" />
+            <div className="w-full aspect-video bg-surface-2" aria-hidden="true" />
           )}
         </div>
       </Link>
