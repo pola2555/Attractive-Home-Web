@@ -920,7 +920,11 @@ const reviewEditSchema = z.object({
   lookId: z.string().uuid().nullable(),
   materialId: z.string().uuid().nullable(),
   collectionId: z.string().uuid().nullable(),
+  colorId: z.string().uuid().nullable(),
+  finishId: z.string().uuid().nullable(),
+  brandId: z.string().uuid().nullable(),
   applicationIds: z.array(z.string().uuid()).max(50),
+  performanceIds: z.array(z.string().uuid()).max(50),
   // Optional full image list (order matters; index 0 is the cover). An s3Key
   // that starts with http(s) is an absolute URL the app renders as-is, so
   // images added by URL in the session persist without touching S3.
@@ -956,6 +960,9 @@ export async function saveReviewProduct(
           lookId: d.lookId,
           materialId: d.materialId,
           collectionId: d.collectionId,
+          colorId: d.colorId,
+          finishId: d.finishId,
+          brandId: d.brandId,
           ...(status?.success
             ? {
                 reviewStatus: status.data,
@@ -979,6 +986,13 @@ export async function saveReviewProduct(
       if (d.applicationIds.length) {
         await tx.productApplication.createMany({
           data: d.applicationIds.map((applicationId) => ({ productId, applicationId })),
+          skipDuplicates: true,
+        });
+      }
+      await tx.productPerformance.deleteMany({ where: { productId } });
+      if (d.performanceIds.length) {
+        await tx.productPerformance.createMany({
+          data: d.performanceIds.map((performanceAttributeId) => ({ productId, performanceAttributeId })),
           skipDuplicates: true,
         });
       }

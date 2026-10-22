@@ -259,7 +259,7 @@ const STEPS: Step[] = [
       <>
         Every product is <span className="text-green-700 font-semibold">Reviewed</span>,{' '}
         <span className="text-red-700 font-semibold">Not reviewed</span> or{' '}
-        <span className="text-yellow-700 font-semibold">Ask client</span>. These chips filter by
+        <span className="text-yellow-700 font-semibold">Check with business</span>. These chips filter by
         status and combine with any other filter.
       </>
     ),
@@ -277,8 +277,8 @@ const STEPS: Step[] = [
     title: 'Move lists in bulk',
     body: (
       <>
-        With cards selected, <b>Move to list…</b> shifts them between Not reviewed / Reviewed / Ask
-        the client at once — handy for triage before a focused session.
+        With cards selected, <b>Move to list…</b> shifts them between Not reviewed / Reviewed /
+        Check with business at once — handy for triage before a focused session.
       </>
     ),
   },
@@ -324,7 +324,7 @@ const STEPS: Step[] = [
     body: (
       <>
         <b>Drag</b> images to reorder (or use <b>◀ ▶</b>), set any one as <b>cover</b> with ★, and{' '}
-        <b>add by URL</b> or <b>remove</b>. The first image is the cover.
+        <b>upload to S3</b> or <b>remove</b>. The first image is the cover.
       </>
     ),
   },
@@ -369,7 +369,7 @@ const STEPS: Step[] = [
     body: (
       <>
         Move on without reviewing and you choose: <b>keep it for later</b> (stays red, edits
-        dropped) or <b>Ask the client</b> (saves and parks it{' '}
+        dropped) or <b>Check with business</b> (saves and parks it{' '}
         <span className="text-yellow-700 font-semibold">yellow</span>).
       </>
     ),
@@ -466,7 +466,6 @@ function TourOverlay({ onClose }: { onClose: () => void }) {
   const [held, setHeld] = useState(0);
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   const [undoStack, setUndoStack] = useState<{ idx: number; snap: Draft }[]>([]);
-  const [addUrl, setAddUrl] = useState('');
   const batch = 25; // cosmetic batch size for the demo
 
   const product = DEMO[idx];
@@ -572,11 +571,15 @@ function TourOverlay({ onClose }: { onClose: () => void }) {
     imgs.splice(to, 0, m);
     edit({ images: imgs });
   };
+  // Demo only — simulate an upload to S3 by appending a generated swatch.
   const addImage = () => {
-    const u = addUrl.trim();
-    if (!/^https?:\/\//i.test(u)) return;
-    edit({ images: [...draft.images, { id: `u${Date.now()}`, url: u }] });
-    setAddUrl('');
+    const pal = [
+      ['#b8c4b0', '#6f7d66'],
+      ['#caa36a', '#7a5a33'],
+      ['#9aa7b4', '#55606b'],
+    ];
+    const [a, b] = pal[Math.floor(Math.random() * pal.length)];
+    edit({ images: [...draft.images, { id: `u${Date.now()}`, url: swatch(a, b) }] });
   };
   const nextProduct = () => setIdx((i) => (i + 1) % DEMO.length);
   const markReviewed = () => {
@@ -624,8 +627,6 @@ function TourOverlay({ onClose }: { onClose: () => void }) {
                 reviewed={reviewed}
                 held={held}
                 undoCount={undoStack.length}
-                addUrl={addUrl}
-                setAddUrl={setAddUrl}
                 onEdit={edit}
                 onUndo={undo}
                 onToggleRoom={toggleRoom}
@@ -674,7 +675,7 @@ function TourOverlay({ onClose }: { onClose: () => void }) {
                 onClick={() => resolveSkip('hold')}
                 className="text-start border border-line-strong bg-surface-2 rounded-xl p-3 hover:border-accent"
               >
-                <b className="block text-yellow-600">Move to “Ask the client”</b>
+                <b className="block text-yellow-600">Move to “Check with business”</b>
                 <span className="text-muted text-sm">Saves your edits and parks it for a question.</span>
               </button>
               <button
@@ -856,7 +857,7 @@ function DemoListMain({
             Reviewed
           </span>
           <span className="px-3 py-1 rounded-full text-sm border border-yellow-500 text-yellow-700 bg-yellow-500/20">
-            Ask client
+            Check with business
           </span>
         </span>
       </div>
@@ -1005,8 +1006,6 @@ function DemoEditor(props: {
   reviewed: number;
   held: number;
   undoCount: number;
-  addUrl: string;
-  setAddUrl: (v: string) => void;
   onEdit: (p: Partial<Draft>) => void;
   onUndo: () => void;
   onToggleRoom: (id: string) => void;
@@ -1023,8 +1022,6 @@ function DemoEditor(props: {
     reviewed,
     held,
     undoCount,
-    addUrl,
-    setAddUrl,
     onEdit,
     onUndo,
     onToggleRoom,
@@ -1050,7 +1047,7 @@ function DemoEditor(props: {
           Product {reviewed + 1} of {batch}
         </span>
         <span className="text-sm text-muted">
-          {reviewed} reviewed{held ? ` · ${held} to ask client` : ''}
+          {reviewed} reviewed{held ? ` · ${held} to check with business` : ''}
         </span>
         <div className="ms-auto flex items-center gap-2">
           <button
@@ -1153,28 +1150,13 @@ function DemoEditor(props: {
               </div>
             ))}
           </div>
-          <div className="flex gap-2 mt-3">
-            <input
-              value={addUrl}
-              onChange={(e) => setAddUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  onAddImage();
-                }
-              }}
-              placeholder="Add image by URL (https://…)"
-              className={SELECT_CLS}
-            />
-            <button
-              type="button"
-              onClick={onAddImage}
-              disabled={!/^https?:\/\//i.test(addUrl.trim())}
-              className="px-3 rounded-lg border border-line-strong text-ink hover:border-accent disabled:opacity-40 whitespace-nowrap text-sm"
-            >
-              Add
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onAddImage}
+            className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-line-strong px-3 py-2.5 text-sm text-ink hover:border-accent/60"
+          >
+            ⬆ Upload image (to S3)
+          </button>
           <p className="text-[11px] text-muted mt-2">
             Drag to reorder, or use ◀ ▶; the first image is the cover (★).{' '}
             <span data-tour="full-editor" className="text-accent underline">
@@ -1278,7 +1260,7 @@ function DemoDoneMain({ reviewed, held, batch }: { reviewed: number; held: numbe
           You reviewed <b className="text-green-600">{reviewed}</b> product{reviewed === 1 ? '' : 's'}
           {held > 0 && (
             <>
-              , parked <b className="text-yellow-600">{held}</b> for the client
+              , flagged <b className="text-yellow-600">{held}</b> to check with business
             </>
           )}
           {left > 0 && (

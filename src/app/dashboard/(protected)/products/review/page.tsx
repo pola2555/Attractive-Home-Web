@@ -56,6 +56,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
         images: { orderBy: { sortOrder: 'asc' }, select: { thumbKey: true, s3Key: true } },
         source: { select: { code: true } },
         applications: { select: { applicationId: true } },
+        performance: { select: { performanceAttributeId: true } },
       },
     }),
     getFacetOptions(),
@@ -70,7 +71,11 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
     lookId: p.lookId ?? '',
     materialId: p.materialId ?? '',
     collectionId: p.collectionId ?? '',
+    colorId: p.colorId ?? '',
+    finishId: p.finishId ?? '',
+    brandId: p.brandId ?? '',
     applicationIds: p.applications.map((a) => a.applicationId),
+    performanceIds: p.performance.map((pp) => pp.performanceAttributeId),
     images: p.images.map((im) => ({
       s3Key: im.s3Key,
       url: productMediaUrl(im.thumbKey ?? im.s3Key, p.source.code),
@@ -86,7 +91,11 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
       looks={facets.looks}
       materials={facets.materials}
       collections={facets.collections}
+      colors={facets.colors}
+      finishes={facets.finishes}
+      brands={facets.brands}
       applications={facets.applications}
+      performance={facets.performance}
     />
   );
 }

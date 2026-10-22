@@ -47,7 +47,11 @@ export type ReviewProduct = {
   lookId: string;
   materialId: string;
   collectionId: string;
+  colorId: string;
+  finishId: string;
+  brandId: string;
   applicationIds: string[];
+  performanceIds: string[];
   images: Img[];
 };
 
@@ -57,7 +61,11 @@ type Draft = {
   lookId: string;
   materialId: string;
   collectionId: string;
+  colorId: string;
+  finishId: string;
+  brandId: string;
   applicationIds: string[];
+  performanceIds: string[];
   images: Img[];
 };
 
@@ -67,7 +75,11 @@ const draftOf = (p: ReviewProduct): Draft => ({
   lookId: p.lookId,
   materialId: p.materialId,
   collectionId: p.collectionId,
+  colorId: p.colorId,
+  finishId: p.finishId,
+  brandId: p.brandId,
   applicationIds: [...p.applicationIds],
+  performanceIds: [...p.performanceIds],
   images: p.images.map((i) => ({ ...i })),
 });
 
@@ -79,7 +91,11 @@ export default function ReviewSession({
   looks,
   materials,
   collections,
+  colors,
+  finishes,
+  brands,
   applications,
+  performance,
 }: {
   queue: ReviewProduct[];
   total: number;
@@ -88,7 +104,11 @@ export default function ReviewSession({
   looks: FacetOption[];
   materials: FacetOption[];
   collections: FacetOption[];
+  colors: FacetOption[];
+  finishes: FacetOption[];
+  brands: FacetOption[];
   applications: FacetOption[];
+  performance: FacetOption[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -104,7 +124,8 @@ export default function ReviewSession({
   const [reviewed, setReviewed] = useState(0);
   const [held, setHeld] = useState(0);
   const [skipOpen, setSkipOpen] = useState(false);
-  const [addUrl, setAddUrl] = useState('');
+  const [uploading, setUploading] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -119,7 +140,7 @@ export default function ReviewSession({
   if (idx !== lastIdx) {
     setLastIdx(idx);
     setError(null);
-    setAddUrl('');
+    setUploadError(null);
     setDragIdx(null);
     setOverIdx(null);
   }
@@ -147,6 +168,15 @@ export default function ReviewSession({
         : [...draft.applicationIds, id],
     });
   };
+  const togglePerf = (id: string) => {
+    if (!draft) return;
+    const has = draft.performanceIds.includes(id);
+    edit({
+      performanceIds: has
+        ? draft.performanceIds.filter((x) => x !== id)
+        : [...draft.performanceIds, id],
+    });
+  };
   const removeImg = (i: number) => draft && edit({ images: draft.images.filter((_, j) => j !== i) });
   const makeCover = (i: number) =>
     draft && edit({ images: [draft.images[i], ...draft.images.filter((_, j) => j !== i)] });
@@ -162,11 +192,40 @@ export default function ReviewSession({
     setDragIdx(null);
     setOverIdx(null);
   };
-  const addImage = () => {
-    const u = addUrl.trim();
-    if (!draft || !/^https?:\/\//i.test(u)) return;
-    edit({ images: [...draft.images, { s3Key: u, url: u }] });
-    setAddUrl('');
+  const appendImages = (imgs: Img[]) => {
+    if (!imgs.length) return;
+    const cur = drafts[idx] ?? (product ? draftOf(product) : null);
+    if (cur) setUndoStack((u) => [...u, { idx, snap: cur }]);
+    setDrafts((d) => {
+      const base = d[idx] ?? (product ? draftOf(product) : null);
+      if (!base) return d;
+      return { ...d, [idx]: { ...base, images: [...base.images, ...imgs] } };
+    });
+  };
+  // New images upload to S3 (the same bucket the rest of the catalogue uses);
+  // the returned key is what gets saved on the product. No other source.
+  const uploadFiles = async (files: File[]) => {
+    const picked = files.filter((f) => f.type.startsWith('image/'));
+    if (!picked.length) return;
+    setUploadError(null);
+    setUploading((n) => n + picked.length);
+    const done: Img[] = [];
+    for (const file of picked) {
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('kind', 'product');
+        const res = await fetch('/api/dashboard/media/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        done.push({ s3Key: data.key, url: data.url });
+      } catch (e) {
+        setUploadError((e as Error).message);
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+    appendImages(done);
   };
 
   const begin = () => {
@@ -194,7 +253,11 @@ export default function ReviewSession({
     lookId: d.lookId || null,
     materialId: d.materialId || null,
     collectionId: d.collectionId || null,
+    colorId: d.colorId || null,
+    finishId: d.finishId || null,
+    brandId: d.brandId || null,
     applicationIds: d.applicationIds,
+    performanceIds: d.performanceIds,
     images: d.images.map((im) => ({ s3Key: im.s3Key })),
   });
 
@@ -284,7 +347,7 @@ export default function ReviewSession({
           You reviewed <b className="text-green-600">{reviewed}</b> product{reviewed === 1 ? '' : 's'}
           {held > 0 && (
             <>
-              , parked <b className="text-yellow-600">{held}</b> for the client
+              , flagged <b className="text-yellow-600">{held}</b> to check with business
             </>
           )}
           {left > 0 && (
@@ -334,7 +397,7 @@ export default function ReviewSession({
           Product {idx + 1} of {target}
         </span>
         <span className="text-sm text-muted">
-          {reviewed} reviewed{held ? ` · ${held} to ask client` : ''}
+          {reviewed} reviewed{held ? ` · ${held} to check with business` : ''}
         </span>
         <div className="ms-auto flex items-center gap-2">
           <button
@@ -449,30 +512,29 @@ export default function ReviewSession({
             )}
           </div>
 
-          <div className="flex gap-2 mt-3">
+          <label
+            className={`mt-3 flex items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-2.5 text-sm transition-colors ${
+              uploading > 0
+                ? 'border-accent/60 text-muted'
+                : 'cursor-pointer border-line-strong text-ink hover:border-accent/60'
+            }`}
+          >
             <input
-              value={addUrl}
-              onChange={(e) => setAddUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  addImage();
-                }
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              disabled={uploading > 0}
+              onChange={(e) => {
+                if (e.target.files) void uploadFiles(Array.from(e.target.files));
+                e.target.value = '';
               }}
-              placeholder="Add image by URL (https://…)"
-              className={`${SEL} text-sm`}
             />
-            <button
-              type="button"
-              onClick={addImage}
-              disabled={!/^https?:\/\//i.test(addUrl.trim())}
-              className="px-3 rounded-lg border border-line-strong text-ink hover:border-accent disabled:opacity-40 whitespace-nowrap"
-            >
-              Add
-            </button>
-          </div>
+            {uploading > 0 ? `Uploading ${uploading}…` : '⬆ Upload image (to S3)'}
+          </label>
+          {uploadError && <p className="text-[11px] text-red-500 mt-1">{uploadError}</p>}
           <p className="text-[11px] text-muted mt-2">
-            Drag to reorder, or use ◀ ▶; the first image is the cover (★).{' '}
+            New images upload to S3. Drag to reorder, or use ◀ ▶; the first image is the cover (★).{' '}
             <Link
               href={`/dashboard/products/${product.id}/edit`}
               target="_blank"
@@ -480,7 +542,7 @@ export default function ReviewSession({
             >
               Open full product editor ↗
             </Link>{' '}
-            for crop / flip / rotate &amp; file uploads.
+            for crop / flip / rotate.
           </p>
         </div>
 
@@ -514,6 +576,9 @@ export default function ReviewSession({
             options={collections}
             onChange={(v) => edit({ collectionId: v })}
           />
+          <FacetSelect label="Colour" value={draft.colorId} options={colors} onChange={(v) => edit({ colorId: v })} />
+          <FacetSelect label="Finish" value={draft.finishId} options={finishes} onChange={(v) => edit({ finishId: v })} />
+          <FacetSelect label="Brand" value={draft.brandId} options={brands} onChange={(v) => edit({ brandId: v })} />
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1">
               Rooms / use
@@ -538,6 +603,32 @@ export default function ReviewSession({
               })}
             </div>
           </div>
+          {performance.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1">
+                Performance
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {performance.map((a) => {
+                  const on = draft.performanceIds.includes(a.id);
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => togglePerf(a.id)}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                        on
+                          ? 'border-accent bg-accent-2/15 text-accent'
+                          : 'border-line-strong text-ink hover:border-accent/60'
+                      }`}
+                    >
+                      {a.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {error && <p className="text-sm text-red-500">{error}</p>}
         </div>
       </div>
@@ -596,9 +687,9 @@ export default function ReviewSession({
                 disabled={pending}
                 className="text-start border border-line-strong bg-surface-2 rounded-xl p-3 hover:border-accent disabled:opacity-50"
               >
-                <b className="block text-yellow-600">Move to “Ask the client”</b>
+                <b className="block text-yellow-600">Move to “Check with business”</b>
                 <span className="text-muted text-sm">
-                  Saves your edits and parks it — e.g. its name or material needs the client.
+                  Saves your edits and parks it — e.g. its name or material needs a check first.
                 </span>
               </button>
               <button
