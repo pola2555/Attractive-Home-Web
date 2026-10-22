@@ -21,6 +21,7 @@ import {
   deleteUpgrade,
   addSizeStep,
   deleteSizeStep,
+  addSizeBand,
   addTreeNode,
   deleteTreeNode,
   deleteNodes,
@@ -2586,9 +2587,15 @@ function DetailPanel({
         {node.role === 'section' && node.sectionKind === 'size' && (
           <>
             {node.note && <Field k="What it is">{node.note}</Field>}
+            {editable && node.scope && node.scope !== 'shared' && (
+              <div className="formbox">
+                <div className="k">Add a size band</div>
+                <AddSizeBand action={addSizeBand.bind(null, productId)} variantId={node.scope} cur={cur} />
+              </div>
+            )}
             {editable && (
               <div className="formbox">
-                <div className="k">Add a size step</div>
+                <div className="k">Add a size step (legacy)</div>
                 <AddSizeStep
                   action={addSizeStep.bind(null, productId)}
                   scope={node.scope ?? 'shared'}
@@ -3343,6 +3350,40 @@ function AddSizeStep({
       <input name="amount" type="number" step="0.01" placeholder={`+price (${cur})`} className="in" />
       <button disabled={pending} className="btn">
         {pending ? 'Adding…' : '+ Size step'}
+      </button>
+      {state.error && <span className="err">{state.error}</span>}
+    </form>
+  );
+}
+
+// The canvas size band the quote prices from: a measurement (name + unit) and a
+// half-open [from, to) range that charges a surcharge. No pre-existing numeric
+// question needed — the quote derives the measurement input from these bands.
+function AddSizeBand({
+  action,
+  variantId,
+  cur,
+}: {
+  action: BoundAction;
+  variantId: string;
+  cur: string;
+}) {
+  const [state, formAction, pending] = useActionState<FormState, FormData>(action, {});
+  const ref = useResetOnOk(state);
+  return (
+    <form ref={ref} action={formAction} className="flex flex-col gap-2">
+      <input type="hidden" name="variantId" value={variantId} />
+      <div className="flex gap-2">
+        <input name="measureLabel" placeholder="measurement (e.g. Width)" className="in flex-[2]" />
+        <input name="measureUnit" placeholder="unit (mm)" className="in flex-1" />
+      </div>
+      <div className="flex gap-2">
+        <input name="min" type="number" step="any" placeholder="from" className="in flex-1" />
+        <input name="max" type="number" step="any" placeholder="to" className="in flex-1" />
+      </div>
+      <input name="amount" type="number" step="0.01" placeholder={`+price (${cur})`} className="in" />
+      <button disabled={pending} className="btn">
+        {pending ? 'Adding…' : '+ Size band'}
       </button>
       {state.error && <span className="err">{state.error}</span>}
     </form>

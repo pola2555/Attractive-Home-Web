@@ -498,6 +498,87 @@ export async function deleteSizeStep(productId: string, fd: FormData): Promise<v
   rev(productId);
 }
 
+// Canvas size BAND (the model the quote now prices from): a numeric measurement
+// → a surcharge, stored on a ConfigAddon. Unlike addSizeStep/ConfigBand it needs
+// no pre-existing numeric question — the measurement is derived from measureCode,
+// and the quote renders one numeric input per measurement across a build's bands.
+export async function addSizeBand(
+  productId: string,
+  _prev: FormState,
+  fd: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('pricing.write');
+  const templateId = await templateIdOf(productId);
+  if (!templateId) return { error: 'This is not a tree product.' };
+
+  const variantId = str(fd, 'variantId');
+  const variant = await prisma.configVariant.findUnique({
+    where: { id: variantId },
+    select: { templateId: true },
+  });
+  if (!variant || variant.templateId !== templateId) return { error: 'Choose a build.' };
+
+  const measureLabel = str(fd, 'measureLabel');
+  if (!measureLabel) return { error: 'Name the measurement (e.g. Width).' };
+  const measureCode = toCode(measureLabel);
+  const measureUnit = nullableStr(fd, 'measureUnit');
+  const min = numOrNull(str(fd, 'min'));
+  const max = numOrNull(str(fd, 'max'));
+  if (min === null && max === null) return { error: 'Give the band a from and/or to value.' };
+  if (min !== null && max !== null && min >= max) return { error: 'From must be below to.' };
+  const amount = Number(str(fd, 'amount'));
+  if (!Number.isFinite(amount)) return { error: 'Enter a price.' };
+
+  const fmt = (n: number | null) => (n === null ? '' : String(n));
+  const name = `${measureLabel} ${fmt(min)}–${fmt(max)}${measureUnit ? ` ${measureUnit}` : ''}`.trim();
+  const sortOrder = await prisma.configAddon.count({ where: { variantId } });
+  const id = uuidv7();
+  await prisma.configAddon.create({
+    data: {
+      id,
+      variantId,
+      name,
+      amount,
+      attachBase: true,
+      measureCode,
+      measureLabel,
+      measureUnit,
+      rangeMin: min,
+      rangeMax: max,
+      sortOrder,
+    },
+  });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_addon',
+    entityId: id,
+    action: 'create',
+    diff: { sizeBand: { from: null, to: name } },
+  });
+  rev(productId);
+  return { ok: true };
+}
+
+export async function deleteSizeBand(productId: string, fd: FormData): Promise<void> {
+  const user = await requirePermission('pricing.write');
+  const templateId = await templateIdOf(productId);
+  const id = str(fd, 'addonId');
+  const addon = await prisma.configAddon.findUnique({
+    where: { id },
+    include: { variant: { select: { templateId: true } } },
+  });
+  if (!addon || addon.variant.templateId !== templateId || !addon.measureCode) return;
+  await prisma.configAddon.delete({ where: { id } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'config_addon',
+    entityId: id,
+    action: 'delete',
+    diff: { sizeBand: { from: addon.name, to: null } },
+  });
+  rev(productId);
+}
+
 // ---------------------------------------------------------------------------
 // Price table — edited on the canvas in a modal, not a separate page.
 //
