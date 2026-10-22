@@ -1,4 +1,10 @@
-import { priceAddons, type AddonLine, type AddonSelection } from './addons';
+import {
+  priceAddons,
+  priceSizeBands,
+  type AddonLine,
+  type AddonSelection,
+  type SizeBandLine,
+} from './addons';
 import { lookupGrid, selectedVariantCode, variantByCode, withVariant } from './grid';
 import { lookupPriceTree } from './tree';
 import { priceConfiguration, type PriceResult, type PriceSeed, type PriceSeedLine } from './price';
@@ -37,6 +43,8 @@ export type ProductPriceResult = PriceResult & {
   upgradeLines: UpgradeLine[];
   /** Canvas add-ons charged onto the line (priced straight from the tree). */
   addonLines: AddonLine[];
+  /** Canvas size bands charged onto the line (a measurement → a surcharge). */
+  sizeLines: SizeBandLine[];
   /** Measurements that fell through every band — a hole in the price list. */
   unbanded: string[];
   /** True when a base price was actually found. */
@@ -100,8 +108,18 @@ export function priceProduct(input: PriceProductInput): ProductPriceResult {
     variant?.grid?.currency ?? template.currency,
   );
 
+  // Canvas size bands: a numeric measurement picks the band whose range holds it.
+  const sizeResult = template.extrasFromCanvas
+    ? priceSizeBands(variant?.addons ?? [], variant?.priceTree, selection)
+    : { lines: [] as SizeBandLine[], total: 0, issues: [] as string[] };
+
   const seed: PriceSeed = {};
-  const issues: string[] = [...bandResult.issues, ...upgradeResult.issues, ...addonResult.issues];
+  const issues: string[] = [
+    ...bandResult.issues,
+    ...upgradeResult.issues,
+    ...addonResult.issues,
+    ...sizeResult.issues,
+  ];
 
   if (grid.state === 'sold' && grid.amount !== null) {
     const label = variant ? `${variant.name} — base` : 'Base';
@@ -141,6 +159,14 @@ export function priceProduct(input: PriceProductInput): ProductPriceResult {
       source: 'addon',
     });
   }
+  for (const line of sizeResult.lines) {
+    adders.push({
+      code: `size_${line.measureCode}`,
+      label: `${line.label} ${line.value}`,
+      amount: line.amount,
+      source: 'band',
+    });
+  }
   if (adders.length) seed.adder = adders;
 
   const unbanded = unbandedMeasurements(bands, selection);
@@ -163,6 +189,7 @@ export function priceProduct(input: PriceProductInput): ProductPriceResult {
     bandLines: bandResult.lines,
     upgradeLines: upgradeResult.lines,
     addonLines: addonResult.lines,
+    sizeLines: sizeResult.lines,
     unbanded,
     // `no_grid` is priceable. A template that has no grid is priced entirely
     // by its rules — which is every template that existed before grids did —

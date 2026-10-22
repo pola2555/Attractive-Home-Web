@@ -1,6 +1,10 @@
 import { lookupPriceTree } from './tree';
 import type { AddonDef, PriceTreeNodeDef, Selection } from './types';
 
+// ---------------------------------------------------------------------------
+// Size bands (a numeric measurement → a surcharge), priced from the canvas.
+// ---------------------------------------------------------------------------
+
 // Pricing a configuration's ADD-ONS straight from the canvas.
 //
 // The canvas is the single source of truth: an add-on's price, how it is
@@ -196,6 +200,73 @@ export function priceAddons(
       quantity,
       amount,
     });
+  }
+
+  const total = round2(lines.reduce((sum, line) => sum + line.amount, 0));
+  return { lines, total, issues };
+}
+
+export type SizeBandLine = {
+  addonId: string;
+  measureCode: string;
+  label: string;
+  value: number;
+  amount: number;
+};
+
+// Half-open [min, max): a measurement exactly on an upper bound belongs to the
+// next band, matching the supplier lists whose ranges touch at the boundary.
+function inHalfOpen(value: number, min: number | null, max: number | null): boolean {
+  if (min !== null && value < min) return false;
+  if (max !== null && value >= max) return false;
+  return true;
+}
+
+/**
+ * Charge the size bands for the current selection. Each measurement that has
+ * been entered picks the one OFFERED band whose range contains it; a value that
+ * falls through every band is a gap in the price list, reported as an issue
+ * rather than quietly charging nothing.
+ */
+export function priceSizeBands(
+  addons: AddonDef[],
+  baseTree: PriceTreeNodeDef[] | null | undefined,
+  selection: Selection,
+): { lines: SizeBandLine[]; total: number; issues: string[] } {
+  const lines: SizeBandLine[] = [];
+  const issues: string[] = [];
+  const offered = addonsForSelection(
+    addons.filter((a) => a.measure),
+    baseTree,
+    selection,
+  );
+
+  const byMeasure = new Map<string, AddonDef[]>();
+  for (const band of offered) {
+    const code = band.measure!.code;
+    const list = byMeasure.get(code) ?? [];
+    list.push(band);
+    byMeasure.set(code, list);
+  }
+
+  for (const [code, group] of byMeasure) {
+    const value = selection[code]?.numericValue;
+    if (value === null || value === undefined || !Number.isFinite(value)) continue; // not entered
+    const match = group.find((b) => inHalfOpen(value, b.measure!.min, b.measure!.max));
+    if (!match) {
+      const { label, unit } = group[0].measure!;
+      issues.push(`No ${label} band covers ${value}${unit ? ` ${unit}` : ''}.`);
+      continue;
+    }
+    if (match.amount !== null && Number.isFinite(match.amount)) {
+      lines.push({
+        addonId: match.id,
+        measureCode: code,
+        label: match.measure!.label,
+        value,
+        amount: round2(match.amount),
+      });
+    }
   }
 
   const total = round2(lines.reduce((sum, line) => sum + line.amount, 0));

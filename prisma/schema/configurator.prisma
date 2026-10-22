@@ -552,6 +552,17 @@ model ConfigAddon {
   description   String?
   configuration String?
 
+  // SIZE BAND: an add-on that charges `amount` when a numeric measurement falls
+  // in the half-open [rangeMin, rangeMax). `measureCode` identifies the
+  // measurement (e.g. 'width') and groups a variant's bands into ONE numeric
+  // question in the quote; `measureLabel`/`measureUnit` are how that question is
+  // shown. All NULL on a non-size add-on. Retires the parallel ConfigBand rows.
+  measureCode  String?  @map("measure_code")
+  measureLabel String?  @map("measure_label")
+  measureUnit  String?  @map("measure_unit")
+  rangeMin     Decimal? @map("range_min") @db.Decimal(12, 4)
+  rangeMax     Decimal? @map("range_max") @db.Decimal(12, 4)
+
   sortOrder Int @default(0) @map("sort_order")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

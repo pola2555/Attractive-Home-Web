@@ -217,6 +217,16 @@ export type AddonSubChoices = {
   choices: { code: string; name: string; amount: number | null }[];
 };
 
+/** A size band: the add-on charges its `amount` when the numeric measurement
+ *  `code` falls in the half-open [min, max). */
+export type AddonMeasure = {
+  code: string;
+  label: string;
+  unit: string | null;
+  min: number | null;
+  max: number | null;
+};
+
 export type AddonDef = {
   id: string;
   name: string;
@@ -230,6 +240,9 @@ export type AddonDef = {
    *  quote renders it as one labelled sub-question. Null for flat/colour/
    *  multi-level add-ons. */
   subChoices?: AddonSubChoices | null;
+  /** Present when this add-on is a SIZE BAND (a numeric range → surcharge).
+   *  Null for every other add-on. */
+  measure?: AddonMeasure | null;
   sortOrder: number;
 };
 

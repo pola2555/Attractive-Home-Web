@@ -452,6 +452,53 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
     }
   }
 
+  // Sizes: a size-band add-on charges by a numeric measurement. Surface each
+  // distinct measurement as a numeric question; its bands are priced
+  // automatically from the entered value (priceSizeBands). The input range spans
+  // every band for that measurement.
+  const measureByCode = new Map<
+    string,
+    { label: string; unit: string | null; min: number | null; max: number | null }
+  >();
+  for (const variant of row.variants) {
+    for (const addon of variant.addons) {
+      if (!addon.measureCode) continue;
+      const lo = num(addon.rangeMin);
+      const hi = num(addon.rangeMax);
+      const prev = measureByCode.get(addon.measureCode);
+      if (!prev) {
+        measureByCode.set(addon.measureCode, {
+          label: addon.measureLabel ?? addon.measureCode,
+          unit: addon.measureUnit,
+          min: lo,
+          max: hi,
+        });
+      } else {
+        if (lo !== null && (prev.min === null || lo < prev.min)) prev.min = lo;
+        if (hi !== null && (prev.max === null || hi > prev.max)) prev.max = hi;
+      }
+    }
+  }
+  for (const [code, m] of measureByCode) {
+    if (explicitGroupCodes.has(code) || derivedByGroup.has(code)) continue;
+    options.push({
+      id: `measure:${row.id}:${code}`,
+      groupCode: code,
+      name: m.label,
+      helpText: null,
+      inputKind: 'number',
+      unit: m.unit,
+      sortOrder: options.length,
+      isRequired: false,
+      defaultValueCode: null,
+      condition: null,
+      ranges: [{ condition: null, min: m.min, max: m.max, step: null }],
+      variantCode: null,
+      configText: null,
+      values: [],
+    });
+  }
+
   // Price the extras from the tree canvas when the template has canvas add-ons
   // and carries NO legacy ConfigUpgrade/ConfigBand rows — then there is nothing
   // to double-count, which is exactly the shape of anything built on the canvas.
@@ -529,6 +576,15 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
           attachedBaseNodeIds: a.attachments.map((x) => x.baseNodeId),
           nodes: rawNodes.map(toTreeNode),
           subChoices,
+          measure: a.measureCode
+            ? {
+                code: a.measureCode,
+                label: a.measureLabel ?? a.measureCode,
+                unit: a.measureUnit,
+                min: num(a.rangeMin),
+                max: num(a.rangeMax),
+              }
+            : null,
           sortOrder: a.sortOrder,
         };
       }),

@@ -42,10 +42,15 @@ test('canvas-built test door configures, prices and adds to a quote', async ({ p
   // Base price on this branch is 80.
   await expect(page.getByText('USD 80.00').first()).toBeVisible();
 
+  // Size band: entering a width charges the band whose range holds it
+  // (900–1100 → +12 → 92), priced automatically from the canvas.
+  await page.fill('#cfg-width', '1000');
+  await expect(page.getByText('USD 92.00').first()).toBeVisible();
+
   // Option-tree add-on: choosing a hinge finish adds its leaf price on top
-  // (Color-matched +11 → 91), straight from the canvas sub-tree.
+  // (Color-matched +11 → 103), straight from the canvas sub-tree.
   await page.getByLabel('Side concealed hinges').selectOption('color_matched');
-  await expect(page.getByText('USD 91.00').first()).toBeVisible();
+  await expect(page.getByText('USD 103.00').first()).toBeVisible();
 
   // Priceable branch → Add enables.
   const addBtn = page.getByRole('button', { name: 'Add to quote' });
