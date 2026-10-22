@@ -54,9 +54,10 @@ export default async function PortfolioPage({ params }: { params: Promise<{ loca
     <section className="bg-bg text-on-media">
       {/* Hero — the video is scoped to this full-screen band so it can't stretch
           behind the whole page (it previously filled the entire section). No
-          bottom padding: the category tabs' mb-32 is the only gap before the
-          grid, matching the old site. */}
-      <div className="relative overflow-hidden pt-20 md:px-12 lg:px-24">
+          vertical padding so the band is a true 100vh and the video ends at the
+          fold, exactly like the old site; the gap before the grid is the grid's
+          own top padding (on the page background), not space over the video. */}
+      <div className="relative overflow-hidden md:px-12 lg:px-24">
         <VideoPlayer
           videoUrl={siteMediaUrl('Main/Portfolio/master.m3u8')}
           showMuteButton={false}
@@ -105,7 +106,7 @@ export default async function PortfolioPage({ params }: { params: Promise<{ loca
             </div>
           </div>
 
-          <div className="max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-x-36 md:border-b border-gray-300 gap-y-8 mb-32 md:mx-auto">
+          <div className="max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-x-36 md:border-b border-gray-300 gap-y-8 mb-12 md:mx-auto">
             {categories.map((category) => {
               const label = categoryLabel(category.legacyKey, pickTranslation(category.translations, locale)?.title);
               return (
@@ -123,10 +124,11 @@ export default async function PortfolioPage({ params }: { params: Promise<{ loca
         </div>
       </div>
 
-      {/* Project grid — on the page background, below the hero. Only a mobile
-          gutter + bottom padding: the extra md/lg horizontal padding narrowed
-          the cards inside max-w-5xl, squashing the 16:9 covers. */}
-      <div className="max-w-5xl mx-auto grid gap-24 md:grid-cols-2 px-6 pb-20">
+      {/* Project grid — on the page background, below the hero. The top padding
+          is the breathing room between the video's bottom edge and the first
+          row (the old site has ~80px here). No extra md/lg horizontal padding —
+          it narrowed the cards inside max-w-5xl and squashed the 16:9 covers. */}
+      <div className="max-w-5xl mx-auto grid gap-24 md:grid-cols-2 px-6 py-20">
         {projects.map((project) => {
           const tr = pickTranslation(project.translations, locale);
           if (!tr) return null;
