@@ -501,17 +501,37 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
         : null,
       // Base price nodes only; the add-on sub-trees ride on `addons` below.
       priceTree: variant.priceNodes.filter((n) => n.addonId === null).map(toTreeNode),
-      addons: variant.addons.map((a) => ({
-        id: a.id,
-        name: a.name,
-        amount: num(a.amount),
-        priceUnit: a.priceUnit,
-        colorHex: a.colorHex,
-        attachBase: a.attachBase,
-        attachedBaseNodeIds: a.attachments.map((x) => x.baseNodeId),
-        nodes: variant.priceNodes.filter((n) => n.addonId === a.id).map(toTreeNode),
-        sortOrder: a.sortOrder,
-      })),
+      addons: variant.addons.map((a) => {
+        const rawNodes = variant.priceNodes.filter((n) => n.addonId === a.id);
+        // A single-level option sub-tree (every node a root among the add-on's
+        // own nodes) becomes one labelled sub-question in the quote.
+        const rawIds = new Set(rawNodes.map((n) => n.id));
+        const singleLevel =
+          rawNodes.length > 0 && rawNodes.every((n) => !n.parentId || !rawIds.has(n.parentId));
+        const subChoices = singleLevel
+          ? {
+              groupCode: rawNodes[0].group.code,
+              groupName: rawNodes[0].group.translations[0]?.name ?? rawNodes[0].group.code,
+              choices: rawNodes.map((n) => ({
+                code: n.value.code,
+                name: n.value.translations[0]?.name ?? n.value.code,
+                amount: num(n.amount),
+              })),
+            }
+          : null;
+        return {
+          id: a.id,
+          name: a.name,
+          amount: num(a.amount),
+          priceUnit: a.priceUnit,
+          colorHex: a.colorHex,
+          attachBase: a.attachBase,
+          attachedBaseNodeIds: a.attachments.map((x) => x.baseNodeId),
+          nodes: rawNodes.map(toTreeNode),
+          subChoices,
+          sortOrder: a.sortOrder,
+        };
+      }),
     })),
 
     upgrades: row.upgrades.map((upgrade) => ({

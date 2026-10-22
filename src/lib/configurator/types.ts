@@ -209,6 +209,14 @@ export type PriceTreeNodeDef = {
 // tree). It is offered when `attachBase` is set, or when the base selection
 // reaches one of `attachedBaseNodeIds`. A colour node is an add-on with
 // `colorHex` set.
+/** A single-level option sub-tree, flattened for the quote UI: the sub-question
+ *  and its labelled choices with each choice's leaf price. */
+export type AddonSubChoices = {
+  groupCode: string;
+  groupName: string;
+  choices: { code: string; name: string; amount: number | null }[];
+};
+
 export type AddonDef = {
   id: string;
   name: string;
@@ -218,6 +226,10 @@ export type AddonDef = {
   attachBase: boolean;
   attachedBaseNodeIds: string[];
   nodes: PriceTreeNodeDef[];
+  /** Present for a single-level option sub-tree add-on (hinges, glass…): the
+   *  quote renders it as one labelled sub-question. Null for flat/colour/
+   *  multi-level add-ons. */
+  subChoices?: AddonSubChoices | null;
   sortOrder: number;
 };
 

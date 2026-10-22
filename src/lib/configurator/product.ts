@@ -84,12 +84,13 @@ export function priceProduct(input: PriceProductInput): ProductPriceResult {
   const upgrades = upgradesForVariant(template.upgrades ?? [], variantCode);
   const upgradeResult = priceUpgrades(upgrades, picked, selection, derived, quantity);
 
-  // Canvas add-ons priced straight from the tree. During the migration only the
-  // FLAT, non-colour add-ons are charged here (colours are a question, sizes are
-  // still bands, option-tree add-ons follow next); each is offered only on the
-  // branches its canvas attachment hangs on.
+  // Canvas add-ons priced straight from the tree: flat add-ons AND option-tree
+  // add-ons (hinges/glass — priced by their own sub-tree). Colours are a free
+  // question, not a charged add-on, so they are excluded here. priceAddons only
+  // charges the ones actually picked, each offered on the branches its canvas
+  // attachment hangs on.
   const addonDefs = template.extrasFromCanvas
-    ? (variant?.addons ?? []).filter((a) => a.colorHex === null && a.nodes.length === 0)
+    ? (variant?.addons ?? []).filter((a) => a.colorHex === null)
     : [];
   const addonResult = priceAddons(
     addonDefs,

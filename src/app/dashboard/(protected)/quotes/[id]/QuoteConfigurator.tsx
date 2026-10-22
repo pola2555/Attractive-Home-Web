@@ -118,9 +118,9 @@ export default function QuoteConfigurator({
   }, [resolution]);
 
   // Canvas add-ons on offer for the current branch, priced straight from the
-  // tree. For now the FLAT, non-colour add-ons (colours are a question; sizes
-  // are still bands; option-tree add-ons follow next). They appear only once
-  // their branch is reached, and the server re-prices them the same way.
+  // tree. FLAT, non-colour add-ons (a single amount) are checkboxes; colours are
+  // their own swatch question. They appear only once their branch is reached,
+  // and the server re-prices them the same way.
   const upgradeAddons = useMemo(
     () =>
       template?.extrasFromCanvas
@@ -131,6 +131,24 @@ export default function QuoteConfigurator({
   const offeredAddons = useMemo(
     () => addonsForSelection(upgradeAddons, variant?.priceTree, selection),
     [upgradeAddons, variant, selection],
+  );
+
+  // Option-tree add-ons (hinges, glass…) — a sub-question whose chosen leaf
+  // price adds on top of the base. Rendered as a labelled dropdown; picking a
+  // choice both answers the sub-question (in `selection`) and marks the add-on
+  // chosen (in `addPicked`), which is how priceAddons charges it.
+  const treeAddons = useMemo(
+    () =>
+      template?.extrasFromCanvas
+        ? (variant?.addons ?? []).filter(
+            (a) => a.colorHex === null && a.nodes.length > 0 && !!a.subChoices,
+          )
+        : [],
+    [template, variant],
+  );
+  const offeredTreeAddons = useMemo(
+    () => addonsForSelection(treeAddons, variant?.priceTree, selection),
+    [treeAddons, variant, selection],
   );
 
   // The image(s) to show beside each answered tree question — the picture of
@@ -192,6 +210,23 @@ export default function QuoteConfigurator({
       const next = { ...prev };
       if (on) next[id] = qty;
       else delete next[id];
+      return next;
+    });
+  }
+
+  // Pick (or clear) an option-tree add-on's sub-choice: answer its sub-question
+  // in the selection AND mark the add-on chosen so priceAddons walks its sub-tree.
+  function pickSubChoice(addonId: string, groupCode: string, code: string) {
+    setSelection((prev) => {
+      const next = { ...prev };
+      if (code) next[groupCode] = { groupCode, valueCodes: [code], numericValue: null };
+      else delete next[groupCode];
+      return next;
+    });
+    setAddPicked((prev) => {
+      const next = { ...prev };
+      if (code) next[addonId] = 1;
+      else delete next[addonId];
       return next;
     });
   }
@@ -655,6 +690,39 @@ export default function QuoteConfigurator({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {offeredTreeAddons.length > 0 && (
+        <div className="space-y-3">
+          {offeredTreeAddons.map((addon) => {
+            const sub = addon.subChoices!;
+            const chosen = selection[sub.groupCode]?.valueCodes[0] ?? '';
+            const perEach = addon.priceUnit === 'per_unit' || addon.priceUnit === 'per_piece';
+            return (
+              <div key={addon.id} className="border border-line rounded-lg p-3 bg-surface/40">
+                <label className={labelCls} htmlFor={`cfg-addon-${addon.id}`}>
+                  {addon.name}
+                </label>
+                <select
+                  id={`cfg-addon-${addon.id}`}
+                  className={inputCls}
+                  value={chosen}
+                  onChange={(e) => pickSubChoice(addon.id, sub.groupCode, e.target.value)}
+                >
+                  <option value="">— none —</option>
+                  {sub.choices.map((choice) => (
+                    <option key={choice.code} value={choice.code}>
+                      {choice.name}
+                      {choice.amount !== null
+                        ? ` (+${choice.amount.toFixed(2)}${perEach ? ' ea' : ''})`
+                        : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
         </div>
       )}
 
