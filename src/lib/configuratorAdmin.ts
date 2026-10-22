@@ -8,6 +8,7 @@ import type {
   InputKind,
   NumericRange,
   OptionDef,
+  OptionValueDef,
   PriceTreeNodeDef,
   PricingRuleDef,
   PricingStage,
@@ -217,7 +218,10 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
     };
     for (const addon of variant.addons) {
       if (!addon.colorHex) continue;
-      const code = slugifyColour(addon.colorName ?? addon.name);
+      // Identify a colour by its node NAME, which is unique per colour — the
+      // optional colorName label is often a generic placeholder ("Colour") that
+      // would otherwise collapse every colour into one.
+      const code = slugifyColour(addon.name);
       let condition: Condition | null;
       if (addon.attachBase) {
         condition = null; // attached to the whole base price → always offered
@@ -392,6 +396,61 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
         })),
       });
     });
+
+  // Colours: the canvas models each colour as a `colorHex` add-on attached to the
+  // branches it is available on. Surface them as ONE "Colour" question whose
+  // values are those colours, gated by the SAME canvas attachment conditions the
+  // loader already computed above (colourConditionByCode) — so a colour appears
+  // only once the branch that offers it is chosen, exactly like the canvas. It is
+  // a free choice recorded on the quote; a colour that carries a surcharge is a
+  // later refinement. Skipped when an explicit colour option already exists.
+  const isNeverOffered = (c: Condition | null): boolean =>
+    c !== null && typeof c === 'object' && 'any' in c && Array.isArray(c.any) && c.any.length === 0;
+  if (!explicitGroupCodes.has('colour') && !derivedByGroup.has('colour')) {
+    const colourValues: OptionValueDef[] = [];
+    const seenColour = new Set<string>();
+    for (const variant of row.variants) {
+      for (const addon of variant.addons) {
+        if (!addon.colorHex) continue;
+        const code = slugifyColour(addon.name);
+        if (seenColour.has(code)) continue;
+        const condition = colourConditionByCode.get(code) ?? null;
+        if (isNeverOffered(condition)) continue; // attached nowhere → never shown
+        seenColour.add(code);
+        colourValues.push({
+          id: addon.id,
+          code,
+          name: addon.name,
+          numericValue: null,
+          attributes: {},
+          colorHex: addon.colorHex,
+          productId: null,
+          sortOrder: colourValues.length,
+          condition,
+          configText: null,
+          imageUrl: null,
+        });
+      }
+    }
+    if (colourValues.length > 0) {
+      options.push({
+        id: `colour:${row.id}`,
+        groupCode: 'colour',
+        name: 'Colour',
+        helpText: null,
+        inputKind: 'select',
+        unit: null,
+        sortOrder: options.length,
+        isRequired: false,
+        defaultValueCode: null,
+        condition: null,
+        ranges: [],
+        variantCode: null,
+        configText: null,
+        values: colourValues,
+      });
+    }
+  }
 
   // Price the extras from the tree canvas when the template has canvas add-ons
   // and carries NO legacy ConfigUpgrade/ConfigBand rows — then there is nothing

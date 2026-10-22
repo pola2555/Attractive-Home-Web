@@ -421,6 +421,55 @@ export default function QuoteConfigurator({
           );
         }
 
+        // A colour question — its values carry swatches. Render clickable
+        // swatches (pick one; click again to clear) instead of a bare dropdown.
+        if (option.values.some((v) => v.colorHex)) {
+          return (
+            <div key={option.groupCode} className="cfg-reveal">
+              <label className={labelCls}>
+                {option.name}
+                {option.isRequired && <span className="text-accent"> *</span>}
+              </label>
+              <div className="flex flex-wrap gap-2" data-testid={`cfg-colour-${option.groupCode}`}>
+                {option.values.map((value) => {
+                  const selected = entry?.valueCodes[0] === value.code;
+                  const disabled = value.availability !== 'yes';
+                  return (
+                    <button
+                      type="button"
+                      key={value.code}
+                      disabled={disabled}
+                      title={value.name}
+                      aria-label={value.name}
+                      aria-pressed={selected}
+                      onClick={() =>
+                        change(
+                          option.groupCode,
+                          selected
+                            ? undefined
+                            : { groupCode: option.groupCode, valueCodes: [value.code], numericValue: null },
+                        )
+                      }
+                      className={`flex items-center gap-2 px-2 py-1 rounded-lg border text-sm ${
+                        selected
+                          ? 'border-accent ring-2 ring-accent text-heading'
+                          : 'border-line text-ink hover:border-accent/60'
+                      } ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    >
+                      <span
+                        className="w-5 h-5 rounded-full border border-line-strong"
+                        style={{ backgroundColor: value.colorHex ?? 'transparent' }}
+                      />
+                      {value.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {option.helpText && <p className="text-muted text-xs mt-1">{option.helpText}</p>}
+            </div>
+          );
+        }
+
         return (
           <div key={option.groupCode} className="cfg-reveal">
             <label className={labelCls} htmlFor={`cfg-${option.groupCode}`}>
