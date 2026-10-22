@@ -134,7 +134,26 @@ const templateInclude = {
       // add-on's own option sub-tree (addonId set). Split apart in toTemplateDef.
       priceNodes: {
         orderBy: { sortOrder: 'asc' },
-        include: { group: { select: { code: true } }, value: { select: { code: true } } },
+        include: {
+          // Enough of the group/value to synthesise quote questions straight
+          // from the tree (see toTemplateDef) — the canvas builds the tree but
+          // not the ConfigTemplateOption rows the quote renders.
+          group: {
+            select: {
+              code: true,
+              inputKind: true,
+              unit: true,
+              translations: { where: { localeCode: 'en' }, select: { name: true } },
+            },
+          },
+          value: {
+            select: {
+              code: true,
+              numericValue: true,
+              translations: { where: { localeCode: 'en' }, select: { name: true } },
+            },
+          },
+        },
       },
       // The canvas add-ons, loaded so the quote prices them straight from the
       // canvas — a single source of truth — reading each one's price and the
@@ -281,13 +300,115 @@ function toTemplateDef(row: TemplateRow): TemplateDef {
     multiSelect: n.multiSelect,
   });
 
+  // Canvas-built tree products carry a priced decision tree but no explicit
+  // ConfigTemplateOption rows: the visual editor creates the branch vocabulary
+  // and the price nodes, not the questions. Without questions the quote has
+  // nothing to render (and nothing to price), so surface every base-tree group
+  // the explicit options don't already cover as a question, taking its values —
+  // and their order, by tree depth — straight from the tree. The tree still
+  // governs which values each branch actually offers (treeOptionAvailability),
+  // so a derived option simply lists every value that appears under its group.
+  const explicitGroupCodes = new Set(options.map((o) => o.groupCode));
+  type DerivedGroup = {
+    code: string;
+    name: string;
+    inputKind: InputKind;
+    unit: string | null;
+    depth: number;
+    values: Map<string, { id: string; code: string; name: string; numericValue: number | null }>;
+  };
+  const derivedByGroup = new Map<string, DerivedGroup>();
+  for (const variant of row.variants) {
+    const baseNodes = variant.priceNodes.filter((n) => n.addonId === null);
+    const nodeById = new Map(baseNodes.map((n) => [n.id, n] as const));
+    const depthOf = (node: (typeof baseNodes)[number]): number => {
+      let depth = 0;
+      let cur: (typeof baseNodes)[number] | undefined = node;
+      let guard = 0;
+      while (cur?.parentId && nodeById.has(cur.parentId) && guard++ <= nodeById.size) {
+        depth++;
+        cur = nodeById.get(cur.parentId);
+      }
+      return depth;
+    };
+    for (const node of baseNodes) {
+      if (explicitGroupCodes.has(node.group.code)) continue;
+      const depth = depthOf(node);
+      let group = derivedByGroup.get(node.group.code);
+      if (!group) {
+        group = {
+          code: node.group.code,
+          name: node.group.translations[0]?.name ?? node.group.code,
+          inputKind: node.group.inputKind as InputKind,
+          unit: node.group.unit,
+          depth,
+          values: new Map(),
+        };
+        derivedByGroup.set(node.group.code, group);
+      }
+      group.depth = Math.min(group.depth, depth);
+      if (!group.values.has(node.value.code)) {
+        group.values.set(node.value.code, {
+          id: node.valueId,
+          code: node.value.code,
+          name: node.value.translations[0]?.name ?? node.value.code,
+          numericValue: num(node.value.numericValue),
+        });
+      }
+    }
+  }
+  const explicitCount = options.length;
+  [...derivedByGroup.values()]
+    .sort((a, b) => a.depth - b.depth)
+    .forEach((group, index) => {
+      options.push({
+        id: `tree:${row.id}:${group.code}`,
+        groupCode: group.code,
+        name: group.name,
+        helpText: null,
+        inputKind: group.inputKind,
+        unit: group.unit,
+        // After any explicit options, ordered by tree depth so a parent question
+        // always precedes the child it unlocks.
+        sortOrder: explicitCount + index,
+        isRequired: true,
+        defaultValueCode: null,
+        condition: null,
+        ranges: [],
+        variantCode: null,
+        configText: null,
+        values: [...group.values.values()].map((value, i) => ({
+          id: value.id,
+          code: value.code,
+          name: value.name,
+          numericValue: value.numericValue,
+          attributes: {},
+          colorHex: null,
+          productId: null,
+          sortOrder: i,
+          condition: null,
+          configText: null,
+          imageUrl: null,
+        })),
+      });
+    });
+
+  // Price the extras from the tree canvas when the template has canvas add-ons
+  // and carries NO legacy ConfigUpgrade/ConfigBand rows — then there is nothing
+  // to double-count, which is exactly the shape of anything built on the canvas.
+  // The explicit allowlist stays for half-migrated products that still have both.
+  const hasCanvasAddons = row.variants.some((v) => v.addons.length > 0);
+  const hasLegacyExtras = row.upgrades.length > 0 || row.bands.length > 0;
+  const extrasFromCanvas =
+    CANVAS_EXTRAS_TEMPLATES.has(row.code) || (hasCanvasAddons && !hasLegacyExtras);
+
   return {
     id: row.id,
     code: row.code,
     name: row.name,
     currency: row.currency,
     hsCodeId: row.hsCodeId,
-    extrasFromCanvas: CANVAS_EXTRAS_TEMPLATES.has(row.code),
+    extrasFromCanvas,
     options,
     constraints,
     derivedQuantities: row.derivedQuantities.map((q) => ({
