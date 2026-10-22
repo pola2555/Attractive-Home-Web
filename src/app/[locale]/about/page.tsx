@@ -2,15 +2,14 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { isLocale, type Locale } from '@/i18n/config';
+import { isLocale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
 import { getContentBlocks } from '@/lib/content';
-import { prisma } from '@/lib/prisma';
-import { pickTranslation, localeFilter } from '@/lib/translate';
+import { projectMapMarkers, DUBAI_CENTER } from '@/lib/portfolio';
 import { siteMediaUrl } from '@/lib/media';
 import { alternates } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
-import LeafletMap, { type MapMarker } from '@/components/LeafletMap';
+import LeafletMap from '@/components/LeafletMap';
 
 export const revalidate = 3600;
 
@@ -52,31 +51,11 @@ export async function generateMetadata({
   };
 }
 
-// Projects map — shows ONLY projects with real coordinates
-// (docs/DATABASE.md §6: lat/lng start NULL because the old map pins were
-// fake; data-entry adds real ones). The section hides itself while empty.
-async function projectMarkers(locale: Locale, viewLabel: string): Promise<MapMarker[]> {
-  const projects = await prisma.project.findMany({
-    where: { isPublished: true, latitude: { not: null }, longitude: { not: null } },
-    include: {
-      translations: { where: localeFilter(locale) },
-      category: { select: { slug: true } },
-    },
-  });
-  return projects.map((p) => ({
-    lat: Number(p.latitude),
-    lng: Number(p.longitude),
-    title: pickTranslation(p.translations, locale)?.title,
-    href: `/${locale}/portfolio/${p.category.slug}/${p.slug}`,
-    linkLabel: viewLabel,
-  }));
-}
-
 export default async function AboutPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const [dict, blocks] = await Promise.all([getDictionary(locale, 'about'), getContentBlocks(locale)]);
-  const markers = await projectMarkers(locale, t(dict, 'viewProject'));
+  const markers = await projectMapMarkers(locale, t(dict, 'viewProject'));
 
   const pillars = [
     { label: t(dict, 'pillars.architectural'), key: 'architectural' },
@@ -131,14 +110,19 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
       {markers.length > 0 && (
         <section className="bg-bg py-20 px-6">
           <div className="max-w-5xl mx-auto space-y-6">
-            <h2 className="text-3xl sm:text-4xl font-bold text-heading">{blocks['about.map_title']}</h2>
-            <p className="text-ink-soft max-w-3xl">{blocks['about.map_subtitle']}</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-heading">
+              {blocks['about.map_title'] || t(dict, 'mapTitle')}
+            </h2>
+            <p className="text-ink-soft max-w-3xl">
+              {blocks['about.map_subtitle'] || t(dict, 'mapSubtitle')}
+            </p>
             <div className="rounded-lg overflow-hidden border border-line">
               <LeafletMap
-                center={[markers[0].lat, markers[0].lng]}
-                zoom={10}
+                center={DUBAI_CENTER}
+                zoom={11}
                 markers={markers}
                 className="h-[28rem] w-full"
+                scrollWheelZoom
               />
             </div>
           </div>

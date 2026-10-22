@@ -22,7 +22,7 @@ export async function generateMetadata({
   const dict = await getDictionary(locale, 'portfolio');
   return {
     title: t(dict, 'title'),
-    description: t(dict, 'objectsCount'),
+    description: t(dict, 'mapSubtitle'),
     alternates: alternates(locale, '/portfolio'),
   };
 }
@@ -79,9 +79,26 @@ export default async function PortfolioPage({ params }: { params: Promise<{ loca
             <h1 className="text-5xl font-bold mb-2 px-6" style={{ letterSpacing: '2.4px' }}>
               {t(dict, 'title')}
             </h1>
-            <p className="text-lg px-6" style={{ letterSpacing: '0.72px' }}>
-              {t(dict, 'objectsCount')}
-            </p>
+
+            <div className="px-6 mt-4">
+              <Link
+                href={`/${locale}/portfolio/map`}
+                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold py-2 px-4 rounded-lg transition-colors border border-white/30 backdrop-blur-sm"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {t(dict, 'viewOnMap')}
+              </Link>
+            </div>
           </div>
 
           <div className="max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-x-36 md:border-b border-gray-300 gap-y-8 mb-32 md:mx-auto">

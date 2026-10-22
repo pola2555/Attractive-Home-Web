@@ -143,20 +143,31 @@ export async function listProjects(opts: {
       include: {
         translations: EN,
         category: { include: { translations: EN } },
+        // The cover is usually an HLS video (no still image), so the list
+        // thumbnail comes from the first gallery image instead.
+        media: {
+          where: { mediaType: 'image' },
+          orderBy: { sortOrder: 'asc' },
+          take: 1,
+          select: { s3Key: true },
+        },
       },
     }),
   ]);
 
-  const rows: ProjectRow[] = projects.map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    title: p.translations[0]?.title ?? p.slug,
-    categoryTitle: p.category.translations[0]?.title ?? p.category.slug,
-    coverUrl: p.coverKey ? siteMediaUrl(p.coverKey) : null,
-    hasCoords: p.latitude !== null && p.longitude !== null,
-    sortOrder: p.sortOrder,
-    isPublished: p.isPublished,
-  }));
+  const rows: ProjectRow[] = projects.map((p) => {
+    const imageKey = p.media[0]?.s3Key ?? (p.coverType === 'image' ? p.coverKey : null);
+    return {
+      id: p.id,
+      slug: p.slug,
+      title: p.translations[0]?.title ?? p.slug,
+      categoryTitle: p.category.translations[0]?.title ?? p.category.slug,
+      coverUrl: imageKey ? siteMediaUrl(imageKey) : null,
+      hasCoords: p.latitude !== null && p.longitude !== null,
+      sortOrder: p.sortOrder,
+      isPublished: p.isPublished,
+    };
+  });
   return { rows, total };
 }
 
