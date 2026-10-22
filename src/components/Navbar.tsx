@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LOCALES, LOCALE_SHORT, type Locale } from '@/i18n/config';
@@ -32,6 +32,18 @@ const NAV_ITEMS: { key: keyof Omit<NavbarLabels, 'languageLabel' | 'languageName
   { key: 'contacts', path: '/contacts' },
   { key: 'services', path: '/services' },
 ];
+
+// useNavSurface blends --ink/--heading/--accent/--accent-2 toward dark as the
+// bar passes over the cream home bands, so the bar text reads on cream. The
+// language dropdown is a fixed DARK popover, so it must reset those tokens back
+// to the dark-theme defaults — otherwise the (now-dark) item text lands on the
+// dark panel and disappears over a light section.
+const DROPDOWN_VARS = {
+  '--ink': '245 230 211',
+  '--heading': '230 201 168',
+  '--accent': '196 134 74',
+  '--accent-2': '230 201 168',
+} as CSSProperties;
 
 export default function Navbar({ locale, labels }: { locale: Locale; labels: NavbarLabels }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -197,6 +209,7 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
           </button>
           {langOpen && (
             <ul
+              style={DROPDOWN_VARS}
               className="absolute end-0 mt-2 min-w-[10rem] rounded-xl bg-bg/95 backdrop-blur-md border border-accent-2/30 shadow-lg py-1 z-[1100]"
               role="listbox"
             >

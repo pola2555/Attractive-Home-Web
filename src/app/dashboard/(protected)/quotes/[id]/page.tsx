@@ -111,7 +111,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
     <div className="space-y-8 max-w-6xl">
       <div>
         <Link href="/dashboard/quotes" className="text-sm text-accent hover:underline">
-          ← Quotes
+          ← Quotations
         </Link>
         <div className="flex items-center gap-3 mt-2">
           <h1 className="text-2xl font-bold text-heading">{quote.reference}</h1>

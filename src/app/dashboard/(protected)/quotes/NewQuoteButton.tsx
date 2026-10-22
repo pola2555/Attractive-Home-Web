@@ -17,7 +17,7 @@ export default function NewQuoteButton() {
         onClick={() => setOpen(true)}
         className="px-4 py-2 rounded-lg bg-brand-brown hover:bg-brand-brown-hover text-ink"
       >
-        New quote
+        New quotation
       </button>
     );
   }
@@ -27,7 +27,7 @@ export default function NewQuoteButton() {
       <input
         name="title"
         autoFocus
-        placeholder="Quote title (optional)"
+        placeholder="Quotation title (optional)"
         className="px-3 py-2 bg-surface text-ink rounded-lg border border-line-strong focus:outline-none focus:ring-2 focus:ring-accent"
       />
       <button

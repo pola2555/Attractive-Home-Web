@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { LeadStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUser, effectivePermissions } from '@/lib/permissions';
+import DualTime from '@/components/DualTime';
 
 const STATUSES = ['new', 'contacted', 'closed'] as const;
 
@@ -75,7 +76,7 @@ export default async function LeadsPage({
               <tr key={lead.id} className="border-b border-line/50 hover:bg-surface/60">
                 <td className="py-2 pe-4 whitespace-nowrap">
                   <Link href={`/dashboard/leads/${lead.id}`} className="text-accent hover:underline">
-                    {lead.createdAt.toISOString().slice(0, 16).replace('T', ' ')}
+                    <DualTime iso={lead.createdAt.toISOString()} />
                   </Link>
                 </td>
                 <td className="py-2 pe-4">{lead.name}</td>

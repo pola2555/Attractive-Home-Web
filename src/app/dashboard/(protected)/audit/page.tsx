@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import type { AuditAction } from '@prisma/client';
 import { requireUser, effectivePermissions } from '@/lib/permissions';
 import { listAudit } from '@/lib/auditAdmin';
+import DualTime from '@/components/DualTime';
 
 const PAGE_SIZE = 50;
 const ACTIONS: AuditAction[] = ['create', 'update', 'delete', 'login', 'import'];
@@ -47,9 +48,6 @@ export default async function AuditPage({
     return `/dashboard/audit${s ? `?${s}` : ''}`;
   };
 
-  const fmt = (d: Date) =>
-    new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
   return (
     <div>
       <h1 className="text-2xl font-bold text-heading mb-6">
@@ -89,7 +87,9 @@ export default async function AuditPage({
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className="border-b border-line/50 hover:bg-surface/60 align-top">
-              <td className="py-2 pe-4 text-muted whitespace-nowrap">{fmt(r.createdAt)}</td>
+              <td className="py-2 pe-4 text-muted whitespace-nowrap">
+                <DualTime iso={new Date(r.createdAt).toISOString()} />
+              </td>
               <td className="py-2 pe-4 text-muted">{r.actor}</td>
               <td className="py-2 pe-4">
                 <span className="px-2 py-0.5 rounded-full text-xs border border-line text-ink">{r.action}</span>

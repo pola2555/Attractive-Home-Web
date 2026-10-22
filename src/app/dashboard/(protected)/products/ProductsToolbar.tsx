@@ -39,7 +39,7 @@ const CHIPS: { key: string; value: string; label: string; tone?: 'green' | 'red'
   { key: 'noroom', value: '1', label: 'No room' },
   { key: 'review', value: 'new', label: 'Not reviewed', tone: 'red' },
   { key: 'review', value: 'reviewed', label: 'Reviewed', tone: 'green' },
-  { key: 'review', value: 'ask_client', label: 'Ask client', tone: 'yellow' },
+  { key: 'review', value: 'ask_client', label: 'Check with business', tone: 'yellow' },
 ];
 
 // Active-state colour for the review-status chips.
@@ -49,9 +49,8 @@ const CHIP_TONE: Record<string, string> = {
   yellow: 'border-yellow-500 text-yellow-700 bg-yellow-500/20',
 };
 
-const FACET_KEYS = ['source', 'type', 'material', 'look', 'color', 'brand', 'collection'] as const;
+const FACET_KEYS = ['type', 'material', 'look', 'color', 'brand', 'collection'] as const;
 const FACET_LABEL: Record<(typeof FACET_KEYS)[number], string> = {
-  source: 'Source',
   type: 'Type',
   material: 'Material',
   look: 'Look',
@@ -70,7 +69,6 @@ export default function ProductsToolbar({ facets, total }: { facets: ToolbarFace
   const [q, setQ] = useState(params.get('q') ?? '');
 
   const facetOptions: Record<(typeof FACET_KEYS)[number], FacetOption[]> = {
-    source: facets.sources,
     type: facets.types,
     material: facets.materials,
     look: facets.looks,

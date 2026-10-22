@@ -16,7 +16,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const nav = [
     { label: 'Overview', href: '/dashboard', show: true },
     { label: 'Leads', href: '/dashboard/leads', show: permissions.has('leads.read') },
-    { label: 'Quotes', href: '/dashboard/quotes', show: permissions.has('quotes.read') },
+    { label: 'Quotations', href: '/dashboard/quotes', show: permissions.has('quotes.read') },
     { label: 'Products', href: '/dashboard/products', show: permissions.has('catalog.read') },
     { label: 'Pricing', href: '/dashboard/pricing', show: permissions.has('pricing.write') },
     { label: 'Facets', href: '/dashboard/facets', show: permissions.has('catalog.read') },

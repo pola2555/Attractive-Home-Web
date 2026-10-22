@@ -1,10 +1,10 @@
 import { t, type Dictionary } from '@/i18n/getDictionary';
 import { Section, Eyebrow, Heading } from './primitives';
 
-// Native <details>/<summary> accordion (no JS), open by default and left-aligned
-// to match the old site. The +/- is two bars; on open the vertical one rotates
-// onto the horizontal one and reads as a minus. The FAQPage JSON-LD is emitted
-// by the home page from the same strings.
+// Native <details>/<summary> accordion (no JS), collapsed by default and
+// left-aligned. The +/- is two bars; on open the vertical one rotates onto the
+// horizontal one and reads as a minus. The FAQPage JSON-LD is emitted by the
+// home page from the same strings.
 export default function Faq({ dict }: { dict: Dictionary }) {
   const items = [1, 2, 3, 4, 5].map((n) => ({
     q: t(dict, `faq${n}Q`),
@@ -18,7 +18,7 @@ export default function Faq({ dict }: { dict: Dictionary }) {
 
       <div className="mt-10 max-w-4xl border-t border-[#E3D5BF]">
         {items.map((item) => (
-          <details key={item.q} open className="group border-b border-[#E3D5BF]">
+          <details key={item.q} className="group border-b border-[#E3D5BF]">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-5 [&::-webkit-details-marker]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C08B5C]">
               <h3 className="text-base sm:text-lg font-bold leading-snug text-[#0D1822]">{item.q}</h3>
               <span aria-hidden="true" className="relative h-4 w-4 shrink-0">

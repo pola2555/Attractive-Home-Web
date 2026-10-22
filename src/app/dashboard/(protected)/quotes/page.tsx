@@ -4,6 +4,7 @@ import { requireUser, effectivePermissions } from '@/lib/permissions';
 import { listQuotes, QUOTE_STATUSES, QUOTE_STATUS_LABELS, trashDaysLeft } from '@/lib/quotesAdmin';
 import NewQuoteButton from './NewQuoteButton';
 import QuoteRowActions from './QuoteRowActions';
+import DualTime from '@/components/DualTime';
 
 // The quote inbox. Prices here are internal only — `quotes.read` is deliberately
 // separate from `catalog.write` so the data-entry role cannot reach cost basis.
@@ -38,7 +39,7 @@ export default async function QuotesPage({
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-heading">Quotes</h1>
+        <h1 className="text-2xl font-bold text-heading">Quotations</h1>
         {canWrite && <NewQuoteButton />}
       </div>
 
@@ -89,8 +90,8 @@ export default async function QuotesPage({
       {rows.length === 0 ? (
         <p className="text-muted">
           {trash
-            ? 'Trash is empty. Deleted quotes appear here and are kept for 30 days.'
-            : `No quotes yet. ${canWrite ? 'Create one to start assembling configured products into a cart.' : ''}`}
+            ? 'Trash is empty. Deleted quotations appear here and are kept for 30 days.'
+            : `No quotations yet. ${canWrite ? 'Create one to start assembling configured products into a cart.' : ''}`}
         </p>
       ) : (
         <>
@@ -127,7 +128,10 @@ export default async function QuotesPage({
                   <td className="py-2 pe-4">{quote._count.items}</td>
                   <td className="py-2 pe-4">{quote.assignee?.name ?? '—'}</td>
                   <td className="py-2 pe-4 whitespace-nowrap text-muted">
-                    {(trash ? quote.deletedAt : quote.createdAt)?.toISOString().slice(0, 10) ?? '—'}
+                    {(() => {
+                      const d = trash ? quote.deletedAt : quote.createdAt;
+                      return d ? <DualTime iso={d.toISOString()} time={false} /> : '—';
+                    })()}
                   </td>
                   {canWrite && (
                     <td className="py-2 text-end">
@@ -148,7 +152,7 @@ export default async function QuotesPage({
           {pageCount > 1 && (
             <div className="flex items-center gap-3 mt-4 text-sm">
               <span className="text-muted">
-                {total} quotes · page {current} of {pageCount}
+                {total} quotations · page {current} of {pageCount}
               </span>
               {current > 1 && (
                 <Link

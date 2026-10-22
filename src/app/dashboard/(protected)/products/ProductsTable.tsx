@@ -75,7 +75,6 @@ export default function ProductsTable({
               <th className="w-12 py-2 pe-3" />
               <th className="text-start py-2 pe-3">Code</th>
               <th className="text-start py-2 pe-3">Name (en)</th>
-              <th className="text-start py-2 pe-3">Source</th>
               <th className="text-start py-2 pe-3">Type</th>
               <th className="text-start py-2 pe-3">Price</th>
               {canWrite && <th className="text-start py-2 pe-3">Unit</th>}
@@ -182,7 +181,6 @@ function Row({
           </span>
         )}
       </td>
-      <td className="py-2 pe-3 text-muted whitespace-nowrap">{row.sourceCode}</td>
       <td className="py-2 pe-3 text-muted whitespace-nowrap">{row.typeName || '—'}</td>
       {canWrite ? (
         <>
