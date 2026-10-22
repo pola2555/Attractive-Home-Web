@@ -3393,47 +3393,121 @@ function NodeInfoForm({
   );
 }
 
-// Images for a node (a branch, an add-on option, or the base node): one web URL
-// per line. Shows a live thumbnail strip of what is currently saved, then a
-// textarea to edit the list. Plain URLs — no upload — so a node can point at a
-// hosted image. Reused via action + hidden id (nodeId for a branch, variantId
-// for the base node).
+// Images for a node (a branch, an add-on option, or the base node). Staff upload
+// image files straight to S3 (POST /api/dashboard/media/upload, kind=product) and
+// the returned public URL is stored in the node's image list — the same path the
+// accessory modal and the review session use, so every image on the site lives on
+// S3. A live thumb strip shows what's saved (each with a remove ✕), a ＋ tile adds
+// more, and an in-flight upload shows a "…" badge until it lands. The ready URLs
+// are serialised into a hidden `images` field (one per line) so the list rides the
+// very same autosave-on-change contract the plain-text form it replaced used.
+// Reused via action + hidden id (nodeId for a branch, variantId for the base node).
+const MAX_NODE_IMAGES = 12;
+type NodeImg = { _key: number; url: string; status: 'uploading' | 'ready' | 'error'; error?: string };
 function NodeImagesForm({
   action,
   hidden,
-  images,
+  images: initialImages,
 }: {
   action: BoundAction;
   hidden: Record<string, string>;
   images: string[];
 }) {
-  const { formRef, commit, onChange, onSubmit, state, pending } = useAutoSaveForm(action);
+  const { formRef, commit, onSubmit, state, pending } = useAutoSaveForm(action);
+  const [imgs, setImgs] = useState<NodeImg[]>(() =>
+    initialImages.map((url, i) => ({ _key: i, url, status: 'ready' as const })),
+  );
+  const seqRef = useRef(1_000_000);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const savedRef = useRef(initialImages.join('\n'));
+
+  // Only READY images carry a stored URL (an in-flight upload still holds a local
+  // blob: URL that must never be saved). That list is what the hidden input sends.
+  const serialized = imgs
+    .filter((im) => im.status === 'ready')
+    .map((im) => im.url)
+    .join('\n');
+
+  // Save whenever the saved list actually changes (an upload finished, or a remove)
+  // — never on mount. The hidden <input> below already holds `serialized`, so
+  // commit() reads the new value straight off the DOM.
+  useEffect(() => {
+    if (serialized === savedRef.current) return;
+    savedRef.current = serialized;
+    commit();
+  }, [serialized, commit]);
+
+  const uploadOne = async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const _key = seqRef.current++;
+    const objectUrl = URL.createObjectURL(file);
+    setImgs((p) => [...p, { _key, url: objectUrl, status: 'uploading' }]);
+    try {
+      const f = new FormData();
+      f.append('file', file);
+      f.append('kind', 'product');
+      const res = await fetch('/api/dashboard/media/upload', { method: 'POST', body: f });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      setImgs((p) => p.map((im) => (im._key === _key ? { ...im, url: data.url, status: 'ready' } : im)));
+    } catch (e) {
+      setImgs((p) =>
+        p.map((im) => (im._key === _key ? { ...im, status: 'error', error: (e as Error).message } : im)),
+      );
+    }
+  };
+
+  const remaining = MAX_NODE_IMAGES - imgs.filter((im) => im.status !== 'error').length;
+  const uploadErr = imgs.find((im) => im.status === 'error')?.error ?? null;
+
   return (
-    <form
-      ref={formRef}
-      onBlur={commit}
-      onChange={onChange}
-      onSubmit={onSubmit}
-      className="flex flex-col gap-2"
-    >
+    <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-2">
       {Object.entries(hidden).map(([k, v]) => (
         <input key={k} type="hidden" name={k} value={v} />
       ))}
-      {images.length > 0 && (
-        <div className="acc-thumbs">
-          {images.map((url) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={url} src={url} alt="" className="acc-thumb" />
-          ))}
-        </div>
-      )}
-      <textarea
-        name="images"
-        defaultValue={images.join('\n')}
-        placeholder="Image URL (one per line)"
-        className="in ta"
-        rows={2}
+      <input type="hidden" name="images" value={serialized} />
+      <div className="acc-thumbs">
+        {imgs.map((im) => (
+          <div key={im._key} className={`acc-img${im.status === 'error' ? ' err' : ''}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={im.url} alt="" />
+            {im.status === 'uploading' && <span className="acc-img-badge">…</span>}
+            <button
+              type="button"
+              className="acc-img-x"
+              onClick={() => setImgs((p) => p.filter((x) => x._key !== im._key))}
+              aria-label="Remove image"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        {remaining > 0 && (
+          <button
+            type="button"
+            className="acc-img-add"
+            onClick={() => fileRef.current?.click()}
+            aria-label="Upload image to S3"
+            title="Upload image (to S3)"
+          >
+            ＋
+          </button>
+        )}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files) {
+            for (const f of Array.from(e.target.files).slice(0, Math.max(0, remaining))) void uploadOne(f);
+          }
+          e.target.value = '';
+        }}
       />
+      {uploadErr && <p className="tiny" style={{ color: '#e08a84' }}>{uploadErr}</p>}
       <SaveHint state={state} pending={pending} />
     </form>
   );
