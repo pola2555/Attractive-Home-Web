@@ -8,7 +8,7 @@ import { listFavoriteProducts } from '@/lib/favorites';
 import ProductCard from '@/components/ProductCard';
 import { signOutCustomer, resendCustomerVerification } from './actions';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: 'My Account', robots: { index: false, follow: false } };
 
 export default async function AccountPage({
   params,

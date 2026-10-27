@@ -18,9 +18,10 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
-  const dict = await getDictionary(locale, 'services');
   return {
-    title: t(dict, 'heading'),
+    // Short tab/SEO title; the layout appends " | Attractive Home". The long
+    // marketing line stays as the on-page H1 only.
+    title: 'Services',
     alternates: alternates(locale, '/services'),
   };
 }
@@ -54,8 +55,8 @@ export default async function ServicesPage({ params }: { params: Promise<{ local
           <div className="flex flex-col min-h-screen">
             <div className="relative z-1 mb-32 sm:mb-16 grid grid-cols-1 mt-auto">
               <h1
-                className="text-[2.8rem] 2xl:text-[3.2rem] sm:text-5xl font-bold text-white px-8 sm:px-6 lg:px-12 2xl:px-0 tracking-[3px] uppercase"
-                style={{ lineHeight: '1.5' }}
+                className="text-3xl sm:text-5xl 2xl:text-[3.2rem] font-bold text-white px-8 sm:px-6 lg:px-12 2xl:px-0 tracking-[2px] sm:tracking-[3px] uppercase break-words"
+                style={{ lineHeight: '1.4' }}
               >
                 {t(dict, 'heading')}
               </h1>

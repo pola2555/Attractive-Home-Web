@@ -166,8 +166,10 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
         <img src={logoSrc} alt="Attractive Home" className="ah-navbar-logo h-16 sm:h-18 md:h-20 w-auto" />
       </Link>
 
-      {/* Desktop links */}
-      <div className="hidden md:flex items-center gap-x-14 text-ink">
+      {/* Desktop links — full horizontal nav only from lg; md/tablet uses the
+          hamburger so the row can't cramp and clip (gap stays tight at lg, then
+          opens up at xl where there's room). */}
+      <div className="hidden lg:flex items-center gap-x-6 xl:gap-x-14 text-ink">
         {NAV_ITEMS.map((item) => (
           <Link key={item.key} href={href(item.path)} className={`hover:text-accent ${isActive(item.path)}`}>
             {labels[item.key]}
@@ -234,7 +236,7 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
       </div>
 
       {/* Mobile menu button */}
-      <button className="md:hidden text-ink focus:outline-none" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
+      <button className="lg:hidden text-ink focus:outline-none" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
@@ -247,7 +249,7 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
 
       {/* Mobile links */}
       {menuOpen && (
-        <div className="absolute top-full left-0 w-full bg-bg/90 flex flex-col items-center space-y-5 py-5 md:hidden">
+        <div className="absolute top-full left-0 w-full bg-bg/90 flex flex-col items-center space-y-5 py-5 lg:hidden">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.key}

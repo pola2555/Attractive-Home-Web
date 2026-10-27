@@ -4,9 +4,13 @@ import { notFound } from 'next/navigation';
 import { isLocale, type Locale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
 import { verifyCustomerEmail } from '../actions';
+import AuthCardShell from '../AuthCardShell';
 import ConfirmButton from './ConfirmButton';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export const metadata: Metadata = {
+  title: 'Confirm Email',
+  robots: { index: false, follow: false },
+};
 
 // Email confirmation. The emailed link lands here with ?token=…; the customer
 // clicks a button that POSTs to verifyCustomerEmail (so link-prefetch / mail
@@ -23,7 +27,10 @@ export default async function VerifyPage({
   if (!isLocale(raw)) notFound();
   const locale: Locale = raw;
 
-  const [{ token, status }, dict] = await Promise.all([searchParams, getDictionary(locale, 'account')]);
+  const [{ token, status }, dict] = await Promise.all([
+    searchParams,
+    getDictionary(locale, 'account'),
+  ]);
   const accountHref = `/${locale}/account`;
   const signInHref = `/${locale}/account/sign-in`;
 
@@ -64,11 +71,9 @@ export default async function VerifyPage({
   }
 
   return (
-    <section className="min-h-[70vh] flex items-center justify-center px-4 py-20 bg-bg">
-      <div className="w-full max-w-sm bg-surface rounded-xl border border-line p-8 space-y-6">
-        <h1 className="text-xl font-semibold text-heading text-center">{t(dict, 'verifyHeading')}</h1>
-        {body}
-      </div>
-    </section>
+    <AuthCardShell>
+      <h1 className="text-xl font-semibold text-heading text-center">{t(dict, 'verifyHeading')}</h1>
+      {body}
+    </AuthCardShell>
   );
 }
