@@ -10,6 +10,11 @@ import { writeAudit } from '@/lib/audit';
 import { CONFLICT_MESSAGE, parseExpectedUpdatedAt, versionMatches } from '@/lib/optimisticLock';
 import { getTemplate, getProductRules } from '@/lib/configuratorAdmin';
 import { getLandedSettings } from '@/lib/landed/settings';
+import { generateToken } from '@/lib/tokens';
+import { sendQuoteEmail } from '@/lib/email';
+import { SITE_URL } from '@/lib/seo';
+import { isLocale } from '@/i18n/config';
+import { getSharedQuote, totalsLabel } from '@/lib/quotes/shared';
 import {
   FROZEN_MESSAGE,
   isEditable,
@@ -860,4 +865,129 @@ export async function deleteCostComponent(fd: FormData): Promise<void> {
   });
 
   revalidatePath(`/dashboard/quotes/${component.shipment.quoteId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Customer share link
+// ---------------------------------------------------------------------------
+// The public page (/{locale}/quote/{token}) needs no login: the unguessable
+// token (256 bits, base64url) IS the credential, stored on the quote. Revoking
+// nulls it, which turns the link into a 404.
+
+export type ShareState = { ok?: boolean; error?: string; token?: string | null; message?: string };
+
+// Locale-less path; the client prefixes the current origin, the email uses SITE_URL.
+const sharePath = (token: string, locale = 'en') => `/${locale}/quote/${token}`;
+
+export async function createQuoteShareLink(quoteId: string): Promise<ShareState> {
+  const user = await requirePermission('quotes.write');
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: {
+      id: true,
+      status: true,
+      deletedAt: true,
+      shareToken: true,
+      sentAt: true,
+      _count: { select: { items: true } },
+    },
+  });
+  if (!quote) return { error: 'Quote not found.' };
+  if (quote.deletedAt) return { error: 'This quote is in the Trash. Restore it before sharing.' };
+  if (quote._count.items === 0) return { error: 'Add at least one item before sharing.' };
+
+  // Idempotent: an existing link is kept so one the client already has stays valid.
+  const token = quote.shareToken ?? generateToken().token;
+  // Sharing marks the quote as sent (which freezes pricing). A quote that is
+  // already accepted / rejected / expired keeps its status.
+  const markSent = isEditable(quote.status);
+  await prisma.quote.update({
+    where: { id: quoteId },
+    data: {
+      shareToken: token,
+      sentAt: quote.sentAt ?? new Date(),
+      ...(markSent ? { status: 'sent' } : {}),
+    },
+  });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'quote',
+    entityId: quoteId,
+    action: 'update',
+    diff: { shareLink: { from: quote.shareToken ? 'active' : null, to: 'active' } },
+  });
+  revalidatePath(`/dashboard/quotes/${quoteId}`);
+  revalidatePath('/dashboard/quotes');
+  return { ok: true, token };
+}
+
+export async function revokeQuoteShareLink(quoteId: string): Promise<ShareState> {
+  const user = await requirePermission('quotes.write');
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: { id: true, shareToken: true },
+  });
+  if (!quote) return { error: 'Quote not found.' };
+  if (!quote.shareToken) return { ok: true, token: null };
+
+  await prisma.quote.update({ where: { id: quoteId }, data: { shareToken: null } });
+  await writeAudit({
+    userId: user.id,
+    entityType: 'quote',
+    entityId: quoteId,
+    action: 'update',
+    diff: { shareLink: { from: 'active', to: null } },
+  });
+  revalidatePath(`/dashboard/quotes/${quoteId}`);
+  return { ok: true, token: null };
+}
+
+// Email the public link to the client (customer email, else the lead's).
+export async function emailQuoteToClient(quoteId: string): Promise<ShareState> {
+  const user = await requirePermission('quotes.write');
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: {
+      id: true,
+      title: true,
+      validUntil: true,
+      shareToken: true,
+      deletedAt: true,
+      customer: { select: { name: true, email: true } },
+      lead: { select: { name: true, email: true, localeCode: true } },
+      assignee: { select: { email: true } },
+      creator: { select: { email: true } },
+    },
+  });
+  if (!quote || quote.deletedAt) return { error: 'Quote not found.' };
+  if (!quote.shareToken) return { error: 'Generate the share link first.' };
+  const to = quote.customer?.email ?? quote.lead?.email ?? null;
+  if (!to) return { error: 'This quote has no client email.' };
+
+  const shared = await getSharedQuote(quote.shareToken);
+  if (!shared) return { error: 'Quote not found.' };
+  const lang = quote.lead?.localeCode;
+  const result = await sendQuoteEmail({
+    to,
+    name: quote.customer?.name ?? quote.lead?.name ?? null,
+    reference: shared.reference,
+    title: quote.title,
+    url: `${SITE_URL}${sharePath(quote.shareToken, isLocale(lang ?? undefined) ? lang! : 'en')}`,
+    totalLabel: totalsLabel(shared.view.totals) || null,
+    validUntil: quote.validUntil ? quote.validUntil.toISOString().slice(0, 10) : null,
+    replyTo: quote.assignee?.email ?? quote.creator?.email ?? null,
+  });
+
+  await writeAudit({
+    userId: user.id,
+    entityType: 'quote',
+    entityId: quoteId,
+    action: 'update',
+    diff: { emailedTo: { from: null, to } },
+  });
+  if (result.skipped) {
+    return { ok: true, message: `Email isn't configured on this server (EMAIL_FROM unset) — nothing was sent to ${to}.` };
+  }
+  if (!result.ok) return { error: result.error ?? 'The email could not be sent.' };
+  return { ok: true, message: `Quotation emailed to ${to}.` };
 }

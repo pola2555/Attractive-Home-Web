@@ -150,3 +150,30 @@
     animation: none;
   }
 }
+
+/* Customer quote (/[locale]/quote/[token]): print / "Download PDF" layout. The
+   site chrome and every control are hidden so only the quotation sheet prints. */
+@media print {
+  nav,
+  footer,
+  a[href^="https://wa.me"],
+  .print-hide {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .quote-sheet {
+    box-shadow: none !important;
+    border: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .quote-sheet tr {
+    break-inside: avoid;
+  }
+  @page {
+    margin: 14mm;
+  }
+}

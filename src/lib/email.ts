@@ -220,3 +220,45 @@ export function sendLeadNotificationEmail(opts: {
     replyTo: opts.lead.email ?? undefined,
   });
 }
+
+export function sendQuoteEmail(opts: {
+  to: string;
+  name?: string | null;
+  reference: string;
+  title?: string | null;
+  url: string;
+  totalLabel?: string | null;
+  validUntil?: string | null;
+  replyTo?: string | null;
+}): Promise<SendEmailResult> {
+  const rows: [string, string | null | undefined][] = [
+    ['Quotation', opts.reference],
+    ['Project', opts.title],
+    ['Total', opts.totalLabel],
+    ['Valid until', opts.validUntil],
+  ];
+  const rowsHtml = rows
+    .filter(([, v]) => v)
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:5px 16px 5px 0;color:#8a8175;font-size:14px;">${k}</td><td style="padding:5px 0;font-size:14px;font-weight:bold;">${esc(String(v))}</td></tr>`,
+    )
+    .join('');
+  const html = layout(
+    `Your quotation ${opts.reference}`,
+    `<p>${greeting(opts.name)}</p>
+<p>Thank you for your interest in ${BRAND}. Your quotation is ready — you can view and print it using the button below.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px;">${rowsHtml}</table>
+<p style="margin:24px 0;">${button(opts.url, 'View quotation')}</p>
+<p style="color:#8a8175;font-size:13px;">Questions? Just reply to this email.</p>`,
+  );
+  const text = `Your ${BRAND} quotation ${opts.reference}${opts.totalLabel ? ` — ${opts.totalLabel}` : ''}:\n${opts.url}`;
+  return sendEmail({
+    to: opts.to,
+    subject: `Your ${BRAND} quotation ${opts.reference}`,
+    html,
+    text,
+    devLink: opts.url,
+    replyTo: opts.replyTo ?? undefined,
+  });
+}

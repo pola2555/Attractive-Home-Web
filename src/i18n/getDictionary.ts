@@ -11,7 +11,8 @@ export type Namespace =
   | 'services'
   | 'catalog'
   | 'portfolio'
-  | 'account';
+  | 'account'
+  | 'quote';
 
 export type Dictionary = Record<string, unknown>;
 

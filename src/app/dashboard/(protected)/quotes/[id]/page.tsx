@@ -21,6 +21,7 @@ import AddMeasureLine, { type MeasureProduct } from './AddMeasureLine';
 import QuoteConfigurator from './QuoteConfigurator';
 import QuoteHeaderForm from './QuoteHeaderForm';
 import QuoteItems from './QuoteItems';
+import ShareQuotePanel from './ShareQuotePanel';
 import ShipmentPanel from './ShipmentPanel';
 import LandedBreakdown from './LandedBreakdown';
 
@@ -176,6 +177,14 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
         <h2 className="text-lg font-semibold text-heading mb-3">Items</h2>
         <QuoteItems quote={quote} canWrite={canWrite && editable} showLanded={SHIPMENT_ENABLED} />
       </section>
+
+      {canWrite && !quote.deletedAt && (
+        <ShareQuotePanel
+          quoteId={quote.id}
+          initialToken={quote.shareToken}
+          clientEmail={quote.customer?.email ?? quote.lead?.email ?? null}
+        />
+      )}
 
       {canWrite && editable && (
         <section className="border border-line rounded-lg p-4 bg-surface/40">

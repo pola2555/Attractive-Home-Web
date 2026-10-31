@@ -49,6 +49,12 @@ model Quote {
   notes      String?
   validUntil DateTime? @map("valid_until") @db.Date
 
+  // Customer-facing share link. The unguessable token (256-bit, base64url) is
+  // the whole credential for /{locale}/quote/{token}; null = not shared / revoked.
+  // sentAt records when the link was first issued to the client.
+  shareToken String?   @unique @map("share_token")
+  sentAt     DateTime? @map("sent_at") @db.Timestamptz(6)
+
   // Soft delete. A deleted quote drops out of the inbox but is KEPT for 30 days
   // so it can be restored from the Trash; the purge (in listQuotes) removes any
   // older than that for good. Null = live.
