@@ -17,7 +17,7 @@ test('data-entry cannot reach pricing or quotes', async ({ page }) => {
   // into that permission, this role would be able to read the company's cost
   // basis and margins.
   await expect(nav.getByRole('link', { name: 'Pricing' })).toHaveCount(0);
-  await expect(nav.getByRole('link', { name: 'Quotes' })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Quotations' })).toHaveCount(0);
   await expect(nav.getByRole('link', { name: 'Products' })).toBeVisible();
   await shot(page, '30-data-entry-nav');
 
@@ -37,12 +37,12 @@ test('sales can quote but cannot edit pricing rules', async ({ page }) => {
   await page.goto('/dashboard');
 
   const nav = page.locator('aside nav');
-  await expect(nav.getByRole('link', { name: 'Quotes' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Quotations' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Pricing' })).toHaveCount(0);
   await shot(page, '31-sales-nav');
 
   await page.goto('/dashboard/quotes');
-  await expect(page.getByRole('heading', { name: 'Quotes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Quotations' })).toBeVisible();
 
   // Rate cards reveal the cost basis, so they stay admin-only.
   await page.goto('/dashboard/pricing/templates');
@@ -52,7 +52,7 @@ test('sales can quote but cannot edit pricing rules', async ({ page }) => {
 test('an admin reaches everything', async ({ page }) => {
   await signInAsAdmin(page);
   const nav = page.locator('aside nav');
-  await expect(nav.getByRole('link', { name: 'Quotes' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Quotations' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Pricing' })).toBeVisible();
   await shot(page, '32-admin-nav');
 });
@@ -60,8 +60,8 @@ test('an admin reaches everything', async ({ page }) => {
 test('the optimistic lock refuses a stale save', async ({ page, context }) => {
   await signInAsAdmin(page);
   await page.goto('/dashboard/quotes');
-  await page.getByRole('button', { name: 'New quote' }).click();
-  await page.getByPlaceholder('Quote title (optional)').fill('E2E concurrency');
+  await page.getByRole('button', { name: 'New quotation' }).click();
+  await page.getByPlaceholder('Quotation title (optional)').fill('E2E concurrency');
   await Promise.all([
     page.waitForURL(/\/dashboard\/quotes\/[0-9a-f-]{36}$/, { timeout: 60_000 }),
     page.getByRole('button', { name: 'Create' }).click(),

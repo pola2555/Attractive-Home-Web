@@ -12,8 +12,8 @@ const QUOTE_TITLE = `E2E Addons ${STAMP}`;
 
 async function openQuote(page: Page): Promise<void> {
   await page.goto('/dashboard/quotes');
-  await page.getByRole('button', { name: 'New quote' }).click();
-  await page.getByPlaceholder('Quote title (optional)').fill(QUOTE_TITLE);
+  await page.getByRole('button', { name: 'New quotation' }).click();
+  await page.getByPlaceholder('Quotation title (optional)').fill(QUOTE_TITLE);
   await Promise.all([
     page.waitForURL(/\/dashboard\/quotes\/[0-9a-f-]{36}$/, { timeout: 60_000 }),
     page.getByRole('button', { name: 'Create' }).click(),

@@ -10,8 +10,8 @@ const TITLE = `E2E Trash ${STAMP}`;
 
 async function createQuote(page: Page): Promise<void> {
   await page.goto('/dashboard/quotes');
-  await page.getByRole('button', { name: 'New quote' }).click();
-  await page.getByPlaceholder('Quote title (optional)').fill(TITLE);
+  await page.getByRole('button', { name: 'New quotation' }).click();
+  await page.getByPlaceholder('Quotation title (optional)').fill(TITLE);
   await Promise.all([
     page.waitForURL(/\/dashboard\/quotes\/[0-9a-f-]{36}$/, { timeout: 60_000 }),
     page.getByRole('button', { name: 'Create' }).click(),
@@ -51,6 +51,10 @@ test('a quote soft-deletes to the Trash, restores, and deletes forever', async (
     page.waitForURL(/\/dashboard\/quotes(\?|$)/, { timeout: 60_000 }),
     inboxRow(page).getByRole('button', { name: 'Delete' }).click(),
   ]);
+  // Let the soft-delete settle before re-opening the Trash — waitForURL above
+  // matches the current URL immediately, so it does not wait for the action
+  // (the first delete relied on the toHaveCount(0) at line 35 for this).
+  await expect(inboxRow(page)).toHaveCount(0);
   await page.goto('/dashboard/quotes?trash=1');
   await inboxRow(page).getByRole('button', { name: 'Delete forever' }).click();
   await inboxRow(page).getByRole('button', { name: 'Confirm' }).click();

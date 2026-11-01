@@ -839,7 +839,8 @@ export async function seedBenison(prisma: PrismaClient): Promise<void> {
       hsCodeId: hsCode?.id ?? null,
       price: 0, // meaningless for a configured product; the grid is the price
       currency: 'USD',
-      isPublished: true,
+      // Demo/reference product: kept out of the public catalog (staff + e2e only).
+      isPublished: false,
       isAvailable: true,
     },
   });

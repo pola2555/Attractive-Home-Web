@@ -20,8 +20,8 @@ async function quoteWithADoor(page: Page): Promise<string> {
   if (quoteUrl) return quoteUrl;
 
   await page.goto('/dashboard/quotes');
-  await page.getByRole('button', { name: 'New quote' }).click();
-  await page.getByPlaceholder('Quote title (optional)').fill('E2E landed cost');
+  await page.getByRole('button', { name: 'New quotation' }).click();
+  await page.getByPlaceholder('Quotation title (optional)').fill('E2E landed cost');
   await Promise.all([
     page.waitForURL(/\/dashboard\/quotes\/[0-9a-f-]{36}$/, { timeout: 60_000 }),
     page.getByRole('button', { name: 'Create' }).click(),

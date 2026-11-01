@@ -56,7 +56,10 @@ const GROUPS: GroupSeed[] = [
     ],
   },
   {
-    code: 'thickness',
+    // Prefixed to stay distinct from any generic "thickness" question a canvas
+    // product may author (e.g. the test_door fixture uses a SELECT thickness):
+    // one global OptionGroup code cannot be both a number and a select.
+    code: 'door_thickness',
     inputKind: 'number',
     unit: 'mm',
     name: 'Thickness',
@@ -116,7 +119,11 @@ export async function seedConfigurator(prisma: PrismaClient): Promise<void> {
   for (const [index, group] of GROUPS.entries()) {
     const row = await prisma.optionGroup.upsert({
       where: { code: group.code },
-      update: {},
+      // Re-apply the shape of the question, not just its existence: a group left
+      // over from an earlier definition (e.g. thickness once authored as a
+      // select) must heal to its current input kind, or it renders as the wrong
+      // control — or, for a valueless select, not at all.
+      update: { inputKind: group.inputKind, unit: group.unit ?? null },
       create: {
         id: uuidv7(),
         code: group.code,
@@ -192,7 +199,7 @@ export async function seedConfigurator(prisma: PrismaClient): Promise<void> {
     { group: 'door_type', sortOrder: 1, isRequired: true },
     { group: 'door_material', sortOrder: 2, isRequired: true },
     {
-      group: 'thickness',
+      group: 'door_thickness',
       sortOrder: 3,
       isRequired: true,
       // Aluminium sections start thicker than timber.
@@ -214,7 +221,7 @@ export async function seedConfigurator(prisma: PrismaClient): Promise<void> {
       // A thin leaf cannot span as wide. A `number` group has no option_values
       // rows, so this conditional range is the ONLY place this rule can live.
       ranges: [
-        { condition: { group: 'thickness', op: '<', value: 45 }, min: 600, max: 1200, step: 10 },
+        { condition: { group: 'door_thickness', op: '<', value: 45 }, min: 600, max: 1200, step: 10 },
         { condition: null, min: 600, max: 1400, step: 10 },
       ],
     },
@@ -309,7 +316,7 @@ export async function seedConfigurator(prisma: PrismaClient): Promise<void> {
         all: [
           { group: 'door_material', in: ['mdf'] },
           { group: 'width', op: '>', value: 1200 },
-          { group: 'thickness', op: '>=', value: 45 },
+          { group: 'door_thickness', op: '>=', value: 45 },
         ],
       },
       message:
@@ -322,7 +329,7 @@ export async function seedConfigurator(prisma: PrismaClient): Promise<void> {
   // are exposed to formulas as `<group>_<attribute>`, hence door_material_density.
   const DERIVED = [
     { code: 'area_m2', formula: 'height * width / 1000000', unit: 'm2', sortOrder: 1 },
-    { code: 'volume_m3', formula: 'area_m2 * thickness / 1000', unit: 'm3', sortOrder: 2 },
+    { code: 'volume_m3', formula: 'area_m2 * door_thickness / 1000', unit: 'm3', sortOrder: 2 },
     { code: 'weight_kg', formula: 'volume_m3 * door_material_density', unit: 'kg', sortOrder: 3 },
   ];
   for (const derived of DERIVED) {

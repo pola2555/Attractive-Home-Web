@@ -19,8 +19,8 @@ async function configureAluDoor(page: Page): Promise<void> {
 
 async function openBenisonQuote(page: Page): Promise<void> {
   await page.goto('/dashboard/quotes');
-  await page.getByRole('button', { name: 'New quote' }).click();
-  await page.getByPlaceholder('Quote title (optional)').fill('E2E Benison');
+  await page.getByRole('button', { name: 'New quotation' }).click();
+  await page.getByPlaceholder('Quotation title (optional)').fill('E2E Benison');
   await Promise.all([
     page.waitForURL(/\/dashboard\/quotes\/[0-9a-f-]{36}$/, { timeout: 60_000 }),
     page.getByRole('button', { name: 'Create' }).click(),
@@ -89,20 +89,28 @@ test('a configured door prices from the grid', async ({ page }) => {
   await shot(page, '62-grid-priced');
 });
 
-test('a combination the supplier does not sell is never offered', async ({ page }) => {
+test('a combination the supplier does not sell is refused, not priced', async ({ page }) => {
   await signInAsAdmin(page);
   await openBenisonQuote(page);
 
-  // 40 mm with PUR banding is sold in SPC only — the dash in the sheet. The
-  // tree does not let the salesperson build the impossible combination in the
-  // first place: on the PUR branch the board question offers ONLY SPC, so there
-  // is nothing to refuse later.
+  // 40 mm with PUR banding is sold in SPC only — WPC and FR are the dashes in
+  // the sheet. The board question still OFFERS all three: hiding an answer sends
+  // whoever is on the phone hunting for something the customer just named. The
+  // guard is at the line instead — the SPC cell prices, and choosing a dash is
+  // refused with a reason, with the line blocked from being added.
   await page.selectOption('#cfg-variant', 'alu_wpc');
   await page.selectOption('#cfg-ben_thickness', '40');
   await page.selectOption('#cfg-ben_edge_banding', 'pur');
-  await expect(page.locator('#cfg-ben_board option[value="spc"]')).toHaveCount(1);
-  await expect(page.locator('#cfg-ben_board option[value="wpc"]')).toHaveCount(0);
-  await expect(page.locator('#cfg-ben_board option[value="fr"]')).toHaveCount(0);
+
+  // The one published cell on this branch: 40 / PUR / SPC = 65.
+  await page.selectOption('#cfg-ben_board', 'spc');
+  await expect(page.getByText('USD 65.00').first()).toBeVisible();
+
+  // Switching to the dash refuses the combination and blocks the add — it never
+  // becomes a priced line.
+  await page.selectOption('#cfg-ben_board', 'wpc');
+  await expect(page.getByText(/does not sell this combination/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add to quote' })).toBeDisabled();
   await shot(page, '63-not-sold');
 });
 
@@ -206,15 +214,13 @@ test('a size with no published band is reported, not charged as nothing', async 
   await shot(page, '69-band-gap');
 });
 
-test('the public door page shows no price and offers WhatsApp', async ({ page }) => {
-  const errors = collectConsoleErrors(page);
-  await page.goto('/en/products/benison-interior-door');
-
-  await expect(page.getByRole('heading', { name: 'Benison Interior Door' })).toBeVisible();
-  const body = await page.locator('main').innerText();
-  expect(body).not.toMatch(/USD\s?\d/);
-  expect(body).not.toMatch(/AED\s?\d/);
-  await shot(page, '70-public-door');
-
-  expect(errors, errors.join('\n')).toEqual([]);
+test('the unpublished demo door is not served on the public site', async ({ page }) => {
+  // The Benison door is a staff/e2e reference product, seeded unpublished so it
+  // stays out of the public catalog. Its public URL must therefore 404: the
+  // configured price list is internal and never leaks to a customer, and the
+  // product name does not render on the public page at all.
+  const response = await page.goto('/en/products/benison-interior-door');
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole('heading', { name: 'Benison Interior Door' })).toHaveCount(0);
+  await shot(page, '70-public-unpublished-404');
 });

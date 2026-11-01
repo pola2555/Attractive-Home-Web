@@ -196,19 +196,18 @@ test('sign-in: wrong credentials are rejected and you stay on the form', async (
   await assertNoAppError(page);
 });
 
-test('sign-up: mismatched passwords are rejected (no account is created)', async ({ page }) => {
+test('sign-up: a too-short password is rejected (no account is created)', async ({ page }) => {
   await page.goto('/en/account/sign-up', { waitUntil: 'domcontentloaded' });
   const email = page.locator('#email');
   await expect(email).toBeVisible();
   await page.fill('#name', 'E2E Reject');
   await email.fill('e2e-reject@attractivehome.test');
-  await page.fill('#password', 'Sufficient1Pass!');
-  const confirm = page.locator('#confirm');
-  if (await confirm.count()) await confirm.fill('DIFFERENT-value-9!');
+  // Under the 8-character minimum: the server rejects it, so no account is made.
+  await page.fill('#password', 'short1');
   await page.click('button[type="submit"]');
-  await page.waitForTimeout(2500);
-  // Validation failure keeps you on sign-up; a created account would redirect.
-  await expect(page).toHaveURL(/sign-up|verify/);
+  await expect(page.getByText(/at least 8 characters/i)).toBeVisible();
+  // Rejection keeps you on sign-up; a created account would redirect to /account.
+  await expect(page).toHaveURL(/sign-up/);
   await assertNoAppError(page);
 });
 
@@ -302,8 +301,8 @@ test('leads: the list opens and a lead detail renders', async ({ page }) => {
 test('quotes: create, rename with an extreme title, save, and it persists', async ({ page }) => {
   await signInAsAdmin(page);
   await page.goto('/dashboard/quotes');
-  await page.getByRole('button', { name: 'New quote' }).click();
-  await page.getByPlaceholder('Quote title (optional)').fill('E2E Sweep base');
+  await page.getByRole('button', { name: 'New quotation' }).click();
+  await page.getByPlaceholder('Quotation title (optional)').fill('E2E Sweep base');
   await Promise.all([
     page.waitForURL(/\/dashboard\/quotes\/[0-9a-f-]{36}$/, { timeout: 60_000 }),
     page.getByRole('button', { name: 'Create' }).click(),

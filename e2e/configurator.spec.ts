@@ -13,7 +13,7 @@ test('sign in and reach the quotes screen', async ({ page }) => {
   const errors = collectConsoleErrors(page);
   await signInAsAdmin(page);
   await page.goto('/dashboard/quotes');
-  await expect(page.getByRole('heading', { name: 'Quotes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Quotations' })).toBeVisible();
   await shot(page, '01-quotes-empty');
   expect(errors, errors.join('\n')).toEqual([]);
 });
@@ -41,8 +41,8 @@ test('create a quote and configure a door', async ({ page }) => {
   await signInAsAdmin(page);
   await page.goto('/dashboard/quotes');
 
-  await page.getByRole('button', { name: 'New quote' }).click();
-  await page.getByPlaceholder('Quote title (optional)').fill('E2E door order');
+  await page.getByRole('button', { name: 'New quotation' }).click();
+  await page.getByPlaceholder('Quotation title (optional)').fill('E2E door order');
   await Promise.all([
     page.waitForURL(/\/dashboard\/quotes\/[0-9a-f-]{36}$/, { timeout: 60_000 }),
     page.getByRole('button', { name: 'Create' }).click(),
@@ -102,10 +102,10 @@ test('the width limit narrows with thickness', async ({ page }) => {
 
   // A number input has no values to hang a condition on, so this rule can only
   // live in the option's conditional ranges.
-  await page.fill('#cfg-thickness', '40');
+  await page.fill('#cfg-door_thickness', '40');
   await expect(page.locator('#cfg-width')).toHaveAttribute('max', '1200');
 
-  await page.fill('#cfg-thickness', '45');
+  await page.fill('#cfg-door_thickness', '45');
   await expect(page.locator('#cfg-width')).toHaveAttribute('max', '1400');
   await shot(page, '07-conditional-range');
 });
@@ -119,7 +119,7 @@ test('a three-way forbidden combination blocks the line', async ({ page }) => {
   await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'mdf');
-  await page.fill('#cfg-thickness', '45');
+  await page.fill('#cfg-door_thickness', '45');
   await page.fill('#cfg-height', '2100');
   await page.fill('#cfg-width', '1300');
   await page.selectOption('#cfg-finish_color', 'natural');
@@ -136,7 +136,7 @@ test('derived quantities compute live and the price previews', async ({ page }) 
   await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'solid_oak');
-  await page.fill('#cfg-thickness', '45');
+  await page.fill('#cfg-door_thickness', '45');
   await page.fill('#cfg-height', '2100');
   await page.fill('#cfg-width', '900');
   await page.selectOption('#cfg-finish_color', 'natural');
@@ -159,7 +159,7 @@ test('adding the item stores the server-computed price', async ({ page }) => {
   await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'solid_oak');
-  await page.fill('#cfg-thickness', '45');
+  await page.fill('#cfg-door_thickness', '45');
   await page.fill('#cfg-height', '2100');
   await page.fill('#cfg-width', '900');
   await page.selectOption('#cfg-finish_color', 'natural');
@@ -189,7 +189,7 @@ test('the volume tier fires at 50 and the setup fee stays per line', async ({ pa
   await page.selectOption('#cfg-template', { label: 'Door (configurable)' });
   await page.selectOption('#cfg-door_type', 'solid');
   await page.selectOption('#cfg-door_material', 'solid_oak');
-  await page.fill('#cfg-thickness', '45');
+  await page.fill('#cfg-door_thickness', '45');
   await page.fill('#cfg-height', '2100');
   await page.fill('#cfg-width', '900');
   await page.selectOption('#cfg-finish_color', 'natural');
