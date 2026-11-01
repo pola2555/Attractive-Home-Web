@@ -1,0 +1,79 @@
+name: CI
+
+# Lint, type-check, unit tests on every push; a separate job proves the
+# production build compiles and that the Prisma migrations build a working
+# schema from empty. e2e is intentionally not here yet — see the note at the
+# bottom of this file.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch/PR cancels the older in-flight run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint · types · unit tests
+    runs-on: ubuntu-latest
+    env:
+      # prisma generate reads the schema only (no connection); a placeholder
+      # keeps it from warning about an unset datasource env.
+      DATABASE_URL: postgresql://user:pass@localhost:5432/placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      # npm install, not npm ci: the committed package-lock.json is generated on
+      # Windows and lacks the Linux optional binaries (same gap that blocks
+      # `npm ci` on the arm64 box). Regenerating the lockfile on Linux would let
+      # both this job and the box switch to `npm ci` — see the deferred note.
+      - run: npm install --no-audit --no-fund
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test
+
+  build:
+    name: Production build · migrations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: attractive_home_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/attractive_home_ci
+      AUTH_SECRET: ci-placeholder-secret-not-used-anywhere-real
+      NEXT_PUBLIC_SITE_URL: https://www.attractivehome.ae
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - run: npx prisma generate
+      # Applying every migration to a fresh database also proves the migration
+      # history (not just `db push`) builds a schema the app can run on.
+      - run: npx prisma migrate deploy
+      - run: npm run build
+
+# DEFERRED — e2e in CI (Playwright). Needs: a seeded database (including the
+# `test_door` canvas fixture, which currently has NO seed — only the dev DB has
+# it), the global-setup E2E staff users, a running dev server, and the browser
+# download. Add a third job once the demo/test fixtures are seedable from code.

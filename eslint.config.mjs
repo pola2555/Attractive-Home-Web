@@ -16,6 +16,10 @@ const eslintConfig = defineConfig([
     'next-env.d.ts',
     // Git-ignored copies of old-repo source data (docs/DATABASE.md §8).
     'scripts/import/data/**',
+    // One-off catalog supplier-analysis/data-migration scripts (archived; not
+    // app code). They use `any` freely for ad-hoc row shaping — linting them
+    // adds no value and would keep CI red over throwaway tooling.
+    'scripts/catalog/**',
   ]),
 ]);
 
