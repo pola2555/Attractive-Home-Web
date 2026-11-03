@@ -17,6 +17,8 @@ export type FooterLabels = {
   fitOut: string;
   companyName: string;
   rights: string;
+  privacy: string;
+  terms: string;
 };
 
 type SocialLink = { platform: string; url: string };
@@ -91,6 +93,14 @@ export default function Footer({
                   </TrackedLink>
                 );
               })}
+            </div>
+            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <Link href={href('/legal/privacy')} className="hover:text-gray-300">
+                {labels.privacy}
+              </Link>
+              <Link href={href('/legal/terms')} className="hover:text-gray-300">
+                {labels.terms}
+              </Link>
             </div>
           </div>
         </div>

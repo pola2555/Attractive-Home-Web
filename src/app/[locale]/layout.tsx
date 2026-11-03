@@ -97,6 +97,8 @@ export default async function LocaleLayout({
     fitOut: t(common, 'footer.fitOut'),
     companyName: t(common, 'footer.companyName'),
     rights: t(common, 'footer.rights'),
+    privacy: t(common, 'footer.privacy'),
+    terms: t(common, 'footer.terms'),
   };
 
   // ProfessionalService structured data — name/phone/socials/address/geo from DB
