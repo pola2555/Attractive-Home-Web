@@ -34,6 +34,7 @@ export default function SmartImage({
       alt={alt}
       className={className}
       loading={loading}
+      decoding="async"
       width={width}
       height={height}
       onError={() => {

@@ -12,6 +12,7 @@ import TrackingScripts from '@/components/TrackingScripts';
 import TrackingNoScript from '@/components/TrackingNoScript';
 import RouteAnalytics from '@/components/RouteAnalytics';
 import { SITE_URL } from '@/lib/seo';
+import { mediaOrigins } from '@/lib/media';
 import '../globals.css';
 
 // Cairo carries the Arabic glyphs; Brown Pro (loaded via @font-face in
@@ -57,6 +58,11 @@ export default async function LocaleLayout({
   const { locale: raw } = await params;
   if (!isLocale(raw)) notFound();
   const locale: Locale = raw;
+
+  // Preconnect to the media + webfont hosts so the TLS handshake is already
+  // done when the LCP image/video and the Brown Pro font start loading. Media
+  // (images/video) are fetched without CORS; the font needs crossorigin.
+  const mediaHosts = mediaOrigins();
 
   const [common, settings, blocks] = await Promise.all([
     getDictionary(locale, 'common'),
@@ -130,6 +136,12 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale} dir={dirOf(locale)} className={cairo.variable}>
+      <head>
+        {mediaHosts.map((origin) => (
+          <link key={origin} rel="preconnect" href={origin} />
+        ))}
+        <link rel="preconnect" href="https://db.onlinewebfonts.com" crossOrigin="anonymous" />
+      </head>
       <body className="antialiased">
         <a href="#main" className="skip-link">
           {t(common, 'skipToContent')}

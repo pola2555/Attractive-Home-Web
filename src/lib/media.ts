@@ -30,3 +30,17 @@ export function productMediaUrl(key: string, sourceCode: string): string {
 export function catalogMediaUrl(key: string): string {
   return join(CATALOG_MEDIA_BASE, key);
 }
+
+// Distinct origins of the media hosts — for <head> preconnect hints so the
+// browser opens the TLS connection before the hero image/video URLs resolve.
+export function mediaOrigins(): string[] {
+  const origins = new Set<string>();
+  for (const base of [SITE_MEDIA_BASE, CATALOG_MEDIA_BASE]) {
+    try {
+      origins.add(new URL(base).origin);
+    } catch {
+      /* ignore a malformed base */
+    }
+  }
+  return [...origins];
+}
