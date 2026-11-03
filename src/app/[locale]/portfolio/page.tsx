@@ -6,7 +6,7 @@ import { getDictionary, t } from '@/i18n/getDictionary';
 import { getCategories, getProjects } from '@/lib/portfolio';
 import { pickTranslation } from '@/lib/translate';
 import { siteMediaUrl } from '@/lib/media';
-import { alternates } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
 import ProjectCard from './ProjectCard';
 
@@ -20,13 +20,14 @@ export async function generateMetadata({
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const dict = await getDictionary(locale, 'portfolio');
-  return {
-    // Tab title in title case ("Portfolio | Attractive Home") — the i18n `title`
-    // is all-caps because it doubles as the big hero H1, so it's not reused here.
+  // Tab title in title case ("Portfolio | Attractive Home") — the i18n `title`
+  // is all-caps because it doubles as the big hero H1, so it's not reused here.
+  return pageMetadata({
+    locale,
+    path: '/portfolio',
     title: 'Portfolio',
     description: t(dict, 'mapSubtitle'),
-    alternates: alternates(locale, '/portfolio'),
-  };
+  });
 }
 
 // Portfolio overview — ported from the old SPA: fullscreen video hero with the

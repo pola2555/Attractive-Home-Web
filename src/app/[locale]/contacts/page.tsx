@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { isLocale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
 import { getContactSettings, getContentBlocks } from '@/lib/content';
-import { alternates } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import LeafletMap from '@/components/LeafletMap';
 import ContactForm, { type ContactFormLabels } from './ContactForm';
 
@@ -17,11 +17,12 @@ export async function generateMetadata({
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const dict = await getDictionary(locale, 'contacts');
-  return {
+  return pageMetadata({
+    locale,
+    path: '/contacts',
     title: t(dict, 'contactInfo'),
     description: t(dict, 'subtext'),
-    alternates: alternates(locale, '/contacts'),
-  };
+  });
 }
 
 // Contact info comes from DB settings (phones/email/geo) and the translatable

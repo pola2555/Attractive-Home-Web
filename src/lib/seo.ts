@@ -17,3 +17,54 @@ export function alternates(locale: Locale, path: string): Metadata['alternates']
   languages['x-default'] = localeUrl(DEFAULT_LOCALE, path);
   return { canonical: localeUrl(locale, path), languages };
 }
+
+export const SITE_NAME = 'Attractive Home';
+
+// og:locale wants a language_TERRITORY tag; map our bare language codes.
+const OG_LOCALE: Record<Locale, string> = {
+  en: 'en_US',
+  ar: 'ar_AE',
+  fr: 'fr_FR',
+  ru: 'ru_RU',
+};
+
+// Default social share image: the localized logo (same asset as the org
+// JSON-LD). A purpose-built 1200×630 image is a future design follow-up; pages
+// with their own photo (products, projects) pass `images` to override.
+function defaultOgImage(locale: Locale): string {
+  return `${SITE_URL}/${encodeURI(locale === 'ar' ? 'Logo AR.webp' : 'Logo EN.webp')}`;
+}
+
+// One place that builds canonical/hreflang + a complete OpenGraph + Twitter
+// card for a page. Title and description are intentionally left to inherit:
+// Next falls back og:title/twitter:title to the page `title` (so the
+// "%s | Attractive Home" template still applies) and og/twitter description to
+// the page `description`. Callers set those as usual and just add the path here.
+export function pageMetadata(opts: {
+  locale: Locale;
+  path: string;
+  title?: Metadata['title'];
+  description?: string;
+  images?: string[];
+  type?: 'website' | 'article';
+}): Metadata {
+  const { locale, path, title, description, images, type = 'website' } = opts;
+  const imageUrls = images && images.length > 0 ? images : [defaultOgImage(locale)];
+  return {
+    ...(title !== undefined ? { title } : {}),
+    ...(description !== undefined ? { description } : {}),
+    alternates: alternates(locale, path),
+    openGraph: {
+      type,
+      siteName: SITE_NAME,
+      url: localeUrl(locale, path),
+      locale: OG_LOCALE[locale],
+      alternateLocale: LOCALES.filter((l) => l !== locale).map((l) => OG_LOCALE[l]),
+      images: imageUrls.map((url) => ({ url })),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      images: imageUrls,
+    },
+  };
+}

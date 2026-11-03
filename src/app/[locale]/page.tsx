@@ -4,7 +4,7 @@ import { isLocale, type Locale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
 import { getContentBlocks, getContactSettings } from '@/lib/content';
 import { siteMediaUrl } from '@/lib/media';
-import { alternates } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
 import ConsultationButton from '@/components/home/ConsultationButton';
 import Introduction from '@/components/home/Introduction';
@@ -23,12 +23,13 @@ export async function generateMetadata({
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const [home, blocks] = await Promise.all([getDictionary(locale, 'home'), getContentBlocks(locale)]);
-  return {
+  return pageMetadata({
+    locale,
+    path: '/',
     // Strong, localised SEO title (overrides the "%s | Attractive Home" template).
     title: { absolute: `${t(home, 'introHeading')} | Attractive Home` },
     description: blocks['about.intro'] ?? t(home, 'introP1'),
-    alternates: alternates(locale, '/'),
-  };
+  });
 }
 
 // Home — fullscreen hero video (title/subtitle are admin-editable content_blocks)

@@ -6,7 +6,7 @@ import { getDictionary, t, type Dictionary } from '@/i18n/getDictionary';
 import { prisma } from '@/lib/prisma';
 import { pickTranslation, localeFilter } from '@/lib/translate';
 import { productMediaUrl } from '@/lib/media';
-import { alternates, localeUrl } from '@/lib/seo';
+import { localeUrl, pageMetadata } from '@/lib/seo';
 import { getContactSettings } from '@/lib/content';
 import { productCardInclude } from '@/lib/catalog';
 import ProductGallery from '@/components/ProductGallery';
@@ -61,16 +61,16 @@ export async function generateMetadata({
   const tr = pickTranslation(product.translations, locale);
   const name = tr?.name ?? product.code ?? slug;
   const image = product.images[0];
-  return {
-    // Per-locale SEO meta lives on the translation rows (docs/DATABASE.md §3);
-    // sensible derivation until data-entry fills them.
+  // Per-locale SEO meta lives on the translation rows (docs/DATABASE.md §3);
+  // sensible derivation until data-entry fills them.
+  return pageMetadata({
+    locale,
+    path: `/products/${slug}`,
     title: tr?.metaTitle ?? name,
     description: tr?.metaDescription ?? tr?.description?.slice(0, 160) ?? undefined,
-    alternates: alternates(locale, `/products/${slug}`),
-    openGraph: image
-      ? { images: [{ url: productMediaUrl(image.s3Key, product.source.code) }] }
-      : undefined,
-  };
+    images: image ? [productMediaUrl(image.s3Key, product.source.code)] : undefined,
+    type: 'article',
+  });
 }
 
 function specRows(

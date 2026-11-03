@@ -7,7 +7,7 @@ import { getCategories, getProjects } from '@/lib/portfolio';
 import { prisma } from '@/lib/prisma';
 import { pickTranslation } from '@/lib/translate';
 import { siteMediaUrl } from '@/lib/media';
-import { alternates } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
 import ProjectCard from '../ProjectCard';
 import BackLink from '@/components/BackLink';
@@ -30,11 +30,12 @@ export async function generateMetadata({
   const row = await prisma.portfolioCategory.findUnique({ where: { slug: category } });
   if (!row) return {};
   const title = t(dict, `categories.${row.legacyKey}.title`);
-  return {
+  return pageMetadata({
+    locale,
+    path: `/portfolio/${category}`,
     title,
     description: t(dict, `categories.${row.legacyKey}.description`),
-    alternates: alternates(locale, `/portfolio/${category}`),
-  };
+  });
 }
 
 export default async function PortfolioCategoryPage({

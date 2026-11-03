@@ -26,7 +26,7 @@ import {
   type ShopKey,
 } from '@/lib/catalogShopByConfig';
 import { getBrandShopConfig } from '@/lib/catalogBrandShopConfig';
-import { alternates } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import ProductCard from '@/components/ProductCard';
 import FiltersSidebar, { catalogHref } from './FiltersSidebar';
 import CatalogFilters from './CatalogFilters';
@@ -42,11 +42,12 @@ export async function generateMetadata({
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const dict = await getDictionary(locale, 'catalog');
-  return {
+  return pageMetadata({
+    locale,
+    path: '/catalog',
     title: t(dict, 'libraryTitle'),
     description: t(dict, 'browse'),
-    alternates: alternates(locale, '/catalog'),
-  };
+  });
 }
 
 // The material library: 4,276 products, faceted filtering with contextual

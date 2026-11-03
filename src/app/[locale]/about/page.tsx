@@ -7,7 +7,7 @@ import { getDictionary, t } from '@/i18n/getDictionary';
 import { getContentBlocks } from '@/lib/content';
 import { projectMapMarkers, DUBAI_CENTER } from '@/lib/portfolio';
 import { siteMediaUrl } from '@/lib/media';
-import { alternates } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
 import LeafletMap from '@/components/LeafletMap';
 
@@ -44,11 +44,12 @@ export async function generateMetadata({
   if (!isLocale(locale)) return {};
   const dict = await getDictionary(locale, 'about');
   const blocks = await getContentBlocks(locale);
-  return {
+  return pageMetadata({
+    locale,
+    path: '/about',
     title: t(dict, 'aboutUs'),
     description: blocks['about.intro'],
-    alternates: alternates(locale, '/about'),
-  };
+  });
 }
 
 export default async function AboutPage({ params }: { params: Promise<{ locale: string }> }) {

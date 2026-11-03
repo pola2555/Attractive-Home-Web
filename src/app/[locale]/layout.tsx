@@ -38,6 +38,7 @@ export async function generateMetadata({
     getTrackingSettings(),
   ]);
   return {
+    metadataBase: new URL(SITE_URL),
     title: { default: t(common, 'documentTitle'), template: '%s | Attractive Home' },
     // Google Search Console verification meta tag (DNS TXT is the primary method).
     ...(tracking.googleVerification

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { LOCALES, isLocale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
-import { alternates } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import { siteMediaUrl } from '@/lib/media';
 import SmartImage from '@/components/SmartImage';
 import BackLink from '@/components/BackLink';
@@ -21,11 +21,12 @@ export async function generateMetadata({
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const dict = await getDictionary(locale, 'portfolio');
-  return {
+  return pageMetadata({
+    locale,
+    path: '/portfolio/aluminum-skirting',
     title: t(dict, 'aluminum.heroTitle'),
     description: t(dict, 'aluminum.heroSubtitle'),
-    alternates: alternates(locale, '/portfolio/aluminum-skirting'),
-  };
+  });
 }
 
 // PDF guides live on the legacy me-central bucket (unchanged from the old site).

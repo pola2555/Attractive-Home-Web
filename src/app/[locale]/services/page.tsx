@@ -5,7 +5,7 @@ import { getDictionary, t } from '@/i18n/getDictionary';
 import { prisma } from '@/lib/prisma';
 import { pickTranslation, localeFilter } from '@/lib/translate';
 import { siteMediaUrl } from '@/lib/media';
-import { alternates } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
 import SmartImage from '@/components/SmartImage';
 
@@ -18,12 +18,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
-  return {
-    // Short tab/SEO title; the layout appends " | Attractive Home". The long
-    // marketing line stays as the on-page H1 only.
-    title: 'Services',
-    alternates: alternates(locale, '/services'),
-  };
+  // Short tab/SEO title; the layout appends " | Attractive Home". The long
+  // marketing line stays as the on-page H1 only.
+  return pageMetadata({ locale, path: '/services', title: 'Services' });
 }
 
 // The 12 services now live in the DB (docs/DATABASE.md §7) — titles and

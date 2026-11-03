@@ -7,7 +7,7 @@ import { getProject } from '@/lib/portfolio';
 import { prisma } from '@/lib/prisma';
 import { pickTranslation } from '@/lib/translate';
 import { siteMediaUrl } from '@/lib/media';
-import { alternates } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
 import SmartImage from '@/components/SmartImage';
 import BackLink from '@/components/BackLink';
@@ -24,11 +24,19 @@ export async function generateMetadata({
   const project = await getProject(locale, slug);
   if (!project || !project.isPublished) return {};
   const tr = pickTranslation(project.translations, locale);
-  return {
+  // Share image: the cover if it's a still, else the first non-video media.
+  const ogKey =
+    project.coverKey && project.coverType !== 'video'
+      ? project.coverKey
+      : project.media.find((m) => m.mediaType !== 'video')?.s3Key;
+  return pageMetadata({
+    locale,
+    path: `/portfolio/${category}/${slug}`,
     title: tr?.metaTitle ?? tr?.title,
     description: tr?.metaDescription ?? tr?.description ?? undefined,
-    alternates: alternates(locale, `/portfolio/${category}/${slug}`),
-  };
+    images: ogKey ? [siteMediaUrl(ogKey)] : undefined,
+    type: 'article',
+  });
 }
 
 type MediaGroup = { key: string; name: string | null; media: { id: string; s3Key: string; mediaType: string }[] };
