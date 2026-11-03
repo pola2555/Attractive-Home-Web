@@ -1,0 +1,2 @@
+# Shell scripts run on the Linux box — keep LF so the shebang never breaks.
+*.sh text eol=lf
