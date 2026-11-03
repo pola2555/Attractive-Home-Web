@@ -48,6 +48,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entry('/contacts'),
     entry('/catalog', undefined, 0.9),
     entry('/portfolio', undefined, 0.9),
+    entry('/legal/privacy', undefined, 0.3),
+    entry('/legal/terms', undefined, 0.3),
     ...categories.map((c) => entry(`/portfolio/${c.slug}`, c.updatedAt, 0.8)),
     ...projects.map((p) => entry(`/portfolio/${p.category.slug}/${p.slug}`, p.updatedAt, 0.7)),
     ...products.map((p) => entry(`/products/${p.slug}`, p.updatedAt, 0.6)),
