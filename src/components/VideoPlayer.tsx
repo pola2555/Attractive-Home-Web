@@ -1,7 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import Hls from 'hls.js';
+
+// Self-contained control labels keyed off the locale in the URL (path-prefix
+// routing) so this generic client component needs no props threaded from every
+// call site.
+const UI_LABELS: Record<string, { mute: string; unmute: string; play: string }> = {
+  en: { mute: 'Mute', unmute: 'Unmute', play: 'Play video' },
+  ar: { mute: 'كتم الصوت', unmute: 'تشغيل الصوت', play: 'تشغيل الفيديو' },
+  fr: { mute: 'Couper le son', unmute: 'Activer le son', play: 'Lire la vidéo' },
+  ru: { mute: 'Выключить звук', unmute: 'Включить звук', play: 'Воспроизвести видео' },
+};
 
 // Ported from the old site's VideoPlayer.jsx — same HLS tuning and lazy
 // loading strategy. Media comes from a single-region S3 REST endpoint (no
@@ -63,6 +74,8 @@ export default function VideoPlayer({
   clickToPlay = false,
   priority = false,
 }: VideoPlayerProps) {
+  const pathname = usePathname();
+  const L = UI_LABELS[pathname?.split('/')[1] ?? 'en'] ?? UI_LABELS.en;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -196,7 +209,7 @@ export default function VideoPlayer({
         className={`relative flex items-center justify-center bg-bg-deep aspect-video cursor-pointer group ${className.replace('h-auto', '')}`}
         onClick={() => setActivated(true)}
         role="button"
-        aria-label="Play video"
+        aria-label={L.play}
       >
         <div className="flex items-center justify-center w-16 h-16 rounded-full bg-white/10 group-hover:bg-white/25 transition-all duration-200">
           <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
@@ -228,10 +241,12 @@ export default function VideoPlayer({
       />
       {showMuteButton && (
         <button
+          type="button"
           onClick={() => setIsMuted((prev) => !prev)}
-          className="absolute right-0 bottom-3/4 -translate-y-3/4 bg-black/10 text-white px-3 py-1 rounded-l-lg text-sm z-30"
+          aria-label={isMuted ? L.unmute : L.mute}
+          className="absolute end-0 bottom-3/4 -translate-y-3/4 bg-black/10 text-white px-3 py-1 rounded-s-lg text-sm z-30"
         >
-          {isMuted ? 'Unmute 🔊' : 'Mute 🔇'}
+          {isMuted ? `${L.unmute} 🔊` : `${L.mute} 🔇`}
         </button>
       )}
     </div>
