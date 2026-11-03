@@ -131,6 +131,9 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} dir={dirOf(locale)} className={cairo.variable}>
       <body className="antialiased">
+        <a href="#main" className="skip-link">
+          {t(common, 'skipToContent')}
+        </a>
         <TrackingNoScript />
         <script
           type="application/ld+json"
@@ -138,7 +141,7 @@ export default async function LocaleLayout({
         />
         <FavoritesProvider>
           <Navbar locale={locale} labels={navbarLabels} />
-          <main>{children}</main>
+          <main id="main" tabIndex={-1}>{children}</main>
           <WhatsAppButton number={settings.whatsapp} label={t(common, 'whatsapp')} />
         </FavoritesProvider>
         <Footer locale={locale} labels={footerLabels} socialLinks={settings.socialLinks} />

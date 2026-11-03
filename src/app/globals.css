@@ -177,3 +177,53 @@
     margin: 14mm;
   }
 }
+
+/* ============================================================================
+   Accessibility
+   ========================================================================== */
+
+/* Visible keyboard focus everywhere. :focus-visible excludes mouse clicks, so
+   pointer users never see it. */
+:focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The skip-link jumps focus into <main>; don't ring the whole content region. */
+#main:focus {
+  outline: none;
+}
+
+/* Skip-to-content link — off-screen until a keyboard user tabs to it, then it
+   pins to the top (inset-inline-start keeps it correct in RTL). */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  inset-inline-start: 0.5rem;
+  z-index: 100;
+  padding: 0.625rem 1rem;
+  border-radius: 0.5rem;
+  background-color: rgb(var(--ink));
+  color: rgb(var(--bg));
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform 0.15s ease;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+/* Honour reduced-motion globally: neutralise animation / transition / smooth
+   scroll for users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
