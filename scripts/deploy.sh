@@ -58,6 +58,10 @@ rm -f incoming.bundle
 npm install --no-audit --no-fund
 npx prisma generate
 if [ "$RUN_MIGRATIONS" = "1" ]; then npx prisma migrate deploy; fi
+# Clear the Turbopack/Next cache before building: a .next cache left from the
+# previous commit can make the new build fail to resolve internal modules
+# (e.g. next/font/google). A clean build avoids that at a small time cost.
+rm -rf .next
 npm run build
 sudo systemctl restart "$SERVICE"
 REMOTE
