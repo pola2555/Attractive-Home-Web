@@ -16,6 +16,7 @@ import {
   CUSTOMER_RESET_TTL_HOURS,
 } from '@/lib/authTokens';
 import { sendCustomerVerificationEmail, sendCustomerPasswordResetEmail } from '@/lib/email';
+import { rateLimit, clientIp, tooManyMessage } from '@/lib/rate-limit';
 
 export type AuthState = { error?: string };
 export type RequestState = { done: boolean; error?: string };
@@ -62,6 +63,13 @@ export async function signUpCustomer(
   const password = field(formData, 'password');
   if (!emailSchema.safeParse(email).success) return { error: 'Enter a valid email address.' };
   if (password.length < MIN_PASSWORD) return { error: `Password must be at least ${MIN_PASSWORD} characters.` };
+
+  const signupIp = await clientIp();
+  const signupRl = rateLimit([
+    { key: `signup:email:${email}`, limit: 4, windowMs: 60 * 60_000 },
+    ...(signupIp ? [{ key: `signup:ip:${signupIp}`, limit: 6, windowMs: 60 * 60_000 }] : []),
+  ]);
+  if (!signupRl.ok) return { error: tooManyMessage(signupRl.retryAfterMs) };
 
   let created: { id: string; email: string; name: string | null };
   try {
@@ -113,6 +121,13 @@ export async function signInCustomer(
   const email = field(formData, 'email').toLowerCase();
   const password = field(formData, 'password');
   if (!email || !password) return { error: 'Enter your email and password.' };
+
+  const signinIp = await clientIp();
+  const signinRl = rateLimit([
+    { key: `signin:email:${email}`, limit: 8, windowMs: 15 * 60_000 },
+    ...(signinIp ? [{ key: `signin:ip:${signinIp}`, limit: 40, windowMs: 15 * 60_000 }] : []),
+  ]);
+  if (!signinRl.ok) return { error: tooManyMessage(signinRl.retryAfterMs) };
 
   // Staff first: their credentials establish the dashboard session, but we leave
   // them on the public home page — the navbar's Dashboard link takes it from here.
@@ -171,6 +186,9 @@ export async function resendCustomerVerification(locale: string): Promise<void> 
   const customer = await requireCustomer();
   if (!customer) redirect(`/${locale}/account/sign-in`);
   if (customer.emailVerifiedAt) redirect(`/${locale}/account`);
+  // Cap resend-bombing per account; look identical to the caller either way.
+  const resendRl = rateLimit([{ key: `verify-resend:cust:${customer.id}`, limit: 4, windowMs: 60 * 60_000 }]);
+  if (!resendRl.ok) redirect(`/${locale}/account?verify_sent=1`);
   await dispatchVerification({ id: customer.id, email: customer.email, name: customer.name }, locale);
   redirect(`/${locale}/account?verify_sent=1`);
 }
@@ -186,6 +204,15 @@ export async function requestCustomerPasswordReset(
 ): Promise<RequestState> {
   const email = field(formData, 'email').toLowerCase();
   if (!emailSchema.safeParse(email).success) return { done: false, error: 'Enter a valid email address.' };
+
+  // Throttle reset-email bombing. When over the limit, return the same generic
+  // "done" as a success and skip the send — no enumeration, no bombing.
+  const resetIp = await clientIp();
+  const resetRl = rateLimit([
+    { key: `reset-req:email:${email}`, limit: 3, windowMs: 60 * 60_000 },
+    ...(resetIp ? [{ key: `reset-req:ip:${resetIp}`, limit: 10, windowMs: 60 * 60_000 }] : []),
+  ]);
+  if (!resetRl.ok) return { done: true };
 
   // Generic response regardless of whether the account exists (no enumeration).
   const customer = await prisma.customer.findUnique({
@@ -215,6 +242,13 @@ export async function resetCustomerPassword(
   const confirm = field(formData, 'confirm');
   if (password.length < MIN_PASSWORD) return { error: `Password must be at least ${MIN_PASSWORD} characters.` };
   if (password !== confirm) return { error: 'Passwords do not match.' };
+
+  // Tokens are cryptographically random, but still cap per-IP token guessing.
+  const resetIp = await clientIp();
+  if (resetIp) {
+    const rl = rateLimit([{ key: `reset-confirm:ip:${resetIp}`, limit: 15, windowMs: 15 * 60_000 }]);
+    if (!rl.ok) return { error: tooManyMessage(rl.retryAfterMs) };
+  }
 
   const customerId = await consumeCustomerEmailToken(token, 'reset_password');
   if (!customerId) return { error: 'This reset link is invalid or has expired. Request a new one.' };
