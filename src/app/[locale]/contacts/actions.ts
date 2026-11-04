@@ -5,6 +5,7 @@ import { uuidv7 } from 'uuidv7';
 import { prisma } from '@/lib/prisma';
 import { isLocale } from '@/i18n/config';
 import { sendLeadNotificationEmail } from '@/lib/email';
+import { rateLimit, clientIp } from '@/lib/rate-limit';
 
 // Lead-first flow (docs/DATABASE.md §7): the lead row IS the record — an
 // email failure can no longer lose the lead. The DB write is the part that
@@ -32,6 +33,15 @@ export async function submitLead(_prev: LeadFormState, formData: FormData): Prom
   if (!parsed.success) return { status: 'error' };
   // Honeypot tripped: pretend success, store nothing.
   if (formData.get('company')) return { status: 'success' };
+
+  // Abuse throttle for a direct-POST bot that skips the honeypot. IP-keyed, so
+  // it only bites behind the Phase 5 reverse proxy that sets a trustworthy
+  // x-forwarded-for; until then clientIp() is null and this is a no-op (the
+  // honeypot is the live protection). See src/lib/rate-limit.ts.
+  const ip = await clientIp();
+  if (ip && !rateLimit([{ key: `lead:ip:${ip}`, limit: 10, windowMs: 10 * 60_000 }]).ok) {
+    return { status: 'error' };
+  }
 
   const lead = await prisma.lead.create({
     data: {

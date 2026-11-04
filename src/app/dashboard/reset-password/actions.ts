@@ -6,6 +6,7 @@ import argon2 from 'argon2';
 import { prisma } from '@/lib/prisma';
 import { consumeStaffPasswordResetToken } from '@/lib/authTokens';
 import { writeAudit } from '@/lib/audit';
+import { rateLimit, clientIp, tooManyMessage } from '@/lib/rate-limit';
 import { DEFAULT_LOCALE } from '@/i18n/config';
 
 export type ResetState = { error?: string };
@@ -21,6 +22,14 @@ export async function resetStaffPassword(_prev: ResetState, formData: FormData):
   const confirm = String(formData.get('confirm') ?? '');
   if (password.length < MIN_PASSWORD) return { error: `Password must be at least ${MIN_PASSWORD} characters.` };
   if (password !== confirm) return { error: 'Passwords do not match.' };
+
+  // Tokens are 256-bit single-use, but still cap per-IP token guessing (parity
+  // with resetCustomerPassword). Best-effort until the Phase 5 proxy sets XFF.
+  const ip = await clientIp();
+  if (ip) {
+    const rl = rateLimit([{ key: `staff-reset-confirm:ip:${ip}`, limit: 15, windowMs: 15 * 60_000 }]);
+    if (!rl.ok) return { error: tooManyMessage(rl.retryAfterMs) };
+  }
 
   const userId = await consumeStaffPasswordResetToken(token);
   if (!userId) return { error: 'This reset link is invalid or has expired. Request a new one.' };

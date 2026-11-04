@@ -7,6 +7,7 @@ import { isLocale } from '@/i18n/config';
 import { sendLeadNotificationEmail } from '@/lib/email';
 import { getLandedSettings } from '@/lib/landed/settings';
 import { nextQuoteReference } from '@/lib/quotesAdmin';
+import { rateLimit, clientIp } from '@/lib/rate-limit';
 
 // "Request a quote" from the public shortlist.
 //
@@ -53,6 +54,16 @@ export async function submitQuoteRequest(
 
   // Honeypot tripped: pretend success, store nothing.
   if (formData.get('company')) return { status: 'success' };
+
+  // Abuse throttle for a direct-POST bot that skips the honeypot — this write is
+  // heavier than a lead (it also burns a quote reference and writes a quote +
+  // items), so cap it a touch tighter. IP-keyed, so it only bites behind the
+  // Phase 5 proxy that sets x-forwarded-for; until then clientIp() is null and
+  // this is a no-op (the honeypot is the live protection). See src/lib/rate-limit.ts.
+  const ip = await clientIp();
+  if (ip && !rateLimit([{ key: `quote-req:ip:${ip}`, limit: 8, windowMs: 10 * 60_000 }]).ok) {
+    return { status: 'error' };
+  }
 
   const rawIds = String(formData.get('productIds') ?? '')
     .split(',')
