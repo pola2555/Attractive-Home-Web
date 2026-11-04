@@ -84,7 +84,8 @@ export default function ShopByTiles({
                 }
                 const pickId = section.picks[value.code];
                 const rep = (pickId && pickImages.get(pickId)) || repMap?.get(value.code);
-                const url = rep ? productMediaUrl(rep.s3Key, rep.sourceCode) : null;
+                // Small cover tile → thumbnail, not the full/original image.
+                const url = rep ? productMediaUrl(rep.thumbKey ?? rep.s3Key, rep.sourceCode) : null;
                 return (
                   <Link
                     key={value.code}

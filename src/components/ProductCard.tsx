@@ -29,16 +29,13 @@ const nameOf = (n: Named, locale: Locale) => (n ? pickTranslation(n.translations
 export default function ProductCard({ product, locale }: { product: ProductForCard; locale: Locale }) {
   const name = pickTranslation(product.translations, locale)?.name ?? product.code ?? '';
   const image = product.images[0];
-  // Serve the right image for the tile: a responsive srcset so phones/non-retina
-  // load the ~10KB thumbnail (400w) while large/retina screens still get the
-  // crisp ~73KB display image (1000w) — instead of every tile downloading the
-  // full image. When there's no thumbnail we fall back to the display image,
-  // and SmartImage falls back to the supplier URL on error.
-  const src = image ? productMediaUrl(image.s3Key, product.source.code) : null;
-  const thumb = image?.thumbKey ? productMediaUrl(image.thumbKey, product.source.code) : null;
-  const srcSet = thumb && src ? `${thumb} 400w, ${src} 1000w` : undefined;
-  // grid: 2-col (<640) → 3-col (<1024) → 4-col capped by max-w-6xl.
-  const sizes = srcSet ? '(min-width: 1024px) 260px, (min-width: 640px) 30vw, 45vw' : undefined;
+  // Grid tiles render ~185–300px, so serve the 400px thumbnail — NOT the full
+  // image, which for catalog products is the ~1000px display (~73KB) and for
+  // attractivehome products the multi-MB original (up to 3.5MB). Loading those
+  // into a thumbnail-sized tile was ~5.8MB of waste and a ~20s mobile LCP. Fall
+  // back to the full image only when a product has no generated thumbnail, and
+  // SmartImage falls back to the supplier URL on error.
+  const src = image ? productMediaUrl(image.thumbKey ?? image.s3Key, product.source.code) : null;
 
   const typeName = nameOf(product.type, locale);
   const lookName = nameOf(product.look, locale);
@@ -58,8 +55,6 @@ export default function ProductCard({ product, locale }: { product: ProductForCa
         {src && (
           <SmartImage
             src={src}
-            srcSet={srcSet}
-            sizes={sizes}
             fallbackSrc={image?.supplierUrl}
             alt={name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

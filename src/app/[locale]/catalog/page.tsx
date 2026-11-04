@@ -110,10 +110,12 @@ export default async function CatalogPage({
     for (const key of SHOP_KEYS) {
       const repMap = repByKey[key];
       if (!repMap) continue;
-      for (const [code, rep] of repMap) shopAutoImages[key][code] = productMediaUrl(rep.s3Key, rep.sourceCode);
+      // Shop-by covers are small tiles — use the thumbnail, not the full image
+      // (for attractivehome reps the full is the multi-MB original).
+      for (const [code, rep] of repMap) shopAutoImages[key][code] = productMediaUrl(rep.thumbKey ?? rep.s3Key, rep.sourceCode);
     }
     for (const [pid, rep] of pickImages as Map<string, RepImage>) {
-      shopPickThumbs[pid] = productMediaUrl(rep.s3Key, rep.sourceCode);
+      shopPickThumbs[pid] = productMediaUrl(rep.thumbKey ?? rep.s3Key, rep.sourceCode);
     }
   }
 
