@@ -4291,6 +4291,7 @@ function AccessoryModal({
 
   const setTier = (i: number, patch: Partial<TierRow>) =>
     setTiers((p) => p.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+  const addTier = () => setTiers((p) => [...p, { minQty: '', unitAmount: '' }]);
   const removeTier = (i: number) => setTiers((p) => (p.length <= 1 ? p : p.filter((_, j) => j !== i)));
 
   return (
@@ -4412,6 +4413,9 @@ function AccessoryModal({
                     </button>
                   </div>
                 ))}
+                <button type="button" className="btn-ghost acc-add-tier" onClick={addTier}>
+                  + Add tier
+                </button>
                 <p className="tiny">The highest quantity at or below the order wins (e.g. 1→$30, 100→$15, 200→$10).</p>
               </div>
             )}
@@ -4806,6 +4810,7 @@ const CANVAS_CSS = `
 .ah-tree .acc-tiers { display:flex; flex-direction:column; gap:6px; border:1px dashed rgb(var(--line-strong)); border-radius:8px; padding:10px; }
 .ah-tree .acc-tier-head { display:grid; grid-template-columns:1fr 1fr 24px; gap:8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:rgb(var(--muted)); }
 .ah-tree .acc-tier { display:grid; grid-template-columns:1fr 1fr 24px; gap:8px; align-items:center; }
+.ah-tree .acc-add-tier { align-self:flex-start; padding:5px 10px; font-size:12px; }
 .ah-tree .acc-img { position:relative; width:64px; height:64px; border-radius:6px; overflow:hidden; border:1px solid rgb(var(--line)); }
 .ah-tree .acc-img.err { border-color:#e08a84; }
 .ah-tree .acc-img img { width:100%; height:100%; object-fit:cover; }
