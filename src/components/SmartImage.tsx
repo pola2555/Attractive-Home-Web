@@ -8,6 +8,12 @@ import { useState } from 'react';
 // supplier domains that can't be whitelisted for next/image.
 type SmartImageProps = {
   src: string;
+  // Optional responsive candidates (e.g. "thumb 400w, display 1000w") + the
+  // sizes hint. The browser then downloads only the variant it needs — a small
+  // thumb for a grid tile on a phone, the full image on a large/retina screen.
+  // Dropped on fallback: supplier CDN URLs have no resized variants.
+  srcSet?: string;
+  sizes?: string;
   fallbackSrc?: string | null;
   alt: string;
   className?: string;
@@ -18,6 +24,8 @@ type SmartImageProps = {
 
 export default function SmartImage({
   src,
+  srcSet,
+  sizes,
   fallbackSrc,
   alt,
   className,
@@ -31,6 +39,8 @@ export default function SmartImage({
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={effective}
+      srcSet={failed ? undefined : srcSet}
+      sizes={failed ? undefined : sizes}
       alt={alt}
       className={className}
       loading={loading}

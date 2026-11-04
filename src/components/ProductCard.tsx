@@ -29,9 +29,16 @@ const nameOf = (n: Named, locale: Locale) => (n ? pickTranslation(n.translations
 export default function ProductCard({ product, locale }: { product: ProductForCard; locale: Locale }) {
   const name = pickTranslation(product.translations, locale)?.name ?? product.code ?? '';
   const image = product.images[0];
-  // Use the full display image (s3Key) rather than the small thumbnail so cards
-  // stay crisp at the larger tile size; SmartImage falls back to the supplier URL.
+  // Serve the right image for the tile: a responsive srcset so phones/non-retina
+  // load the ~10KB thumbnail (400w) while large/retina screens still get the
+  // crisp ~73KB display image (1000w) — instead of every tile downloading the
+  // full image. When there's no thumbnail we fall back to the display image,
+  // and SmartImage falls back to the supplier URL on error.
   const src = image ? productMediaUrl(image.s3Key, product.source.code) : null;
+  const thumb = image?.thumbKey ? productMediaUrl(image.thumbKey, product.source.code) : null;
+  const srcSet = thumb && src ? `${thumb} 400w, ${src} 1000w` : undefined;
+  // grid: 2-col (<640) → 3-col (<1024) → 4-col capped by max-w-6xl.
+  const sizes = srcSet ? '(min-width: 1024px) 260px, (min-width: 640px) 30vw, 45vw' : undefined;
 
   const typeName = nameOf(product.type, locale);
   const lookName = nameOf(product.look, locale);
@@ -51,6 +58,8 @@ export default function ProductCard({ product, locale }: { product: ProductForCa
         {src && (
           <SmartImage
             src={src}
+            srcSet={srcSet}
+            sizes={sizes}
             fallbackSrc={image?.supplierUrl}
             alt={name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
