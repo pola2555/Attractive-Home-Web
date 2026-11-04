@@ -154,7 +154,7 @@ export default async function PortfolioCategoryPage({
           <h3 className="text-xl font-bold text-ink mb-4">{t(dict, 'aluminumProfiles')}</h3>
           <Link
             href={aluminumHref}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300"
           >
             {t(dict, 'exploreMore')}
           </Link>

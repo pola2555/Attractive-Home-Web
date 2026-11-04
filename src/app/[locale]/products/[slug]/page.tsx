@@ -180,7 +180,7 @@ export default async function ProductPage({
           label={t(dict, 'backToCatalog')}
           className="text-sm font-medium text-muted hover:text-accent mb-4"
         />
-        <nav className="text-sm text-muted mb-6" aria-label="Breadcrumb">
+        <nav className="text-sm text-muted mb-6" aria-label={t(dict, 'breadcrumb')}>
           <Link href={`/${locale}/catalog`} className="hover:text-accent">
             {t(dict, 'libraryTitle')}
           </Link>
@@ -239,7 +239,7 @@ export default async function ProductPage({
                 href={`https://wa.me/${settings.whatsapp}?text=${waText}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+                className="inline-flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
               >
                 <SocialIcon platform="whatsapp" className="w-5 h-5" />
                 {t(dict, 'orderWhatsapp')}

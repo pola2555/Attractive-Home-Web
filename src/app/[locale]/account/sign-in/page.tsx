@@ -52,7 +52,7 @@ export default async function SignInPage({
         </p>
         <p className="text-muted">
           {t(dict, 'needAccount')}{' '}
-          <Link href={`/${locale}/account/sign-up`} className="text-accent hover:underline">
+          <Link href={`/${locale}/account/sign-up`} className="text-accent-ink underline">
             {t(dict, 'signUp')}
           </Link>
         </p>

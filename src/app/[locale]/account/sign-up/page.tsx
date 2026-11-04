@@ -39,7 +39,7 @@ export default async function SignUpPage({ params }: { params: Promise<{ locale:
       />
       <p className="text-center text-sm text-muted">
         {t(dict, 'haveAccount')}{' '}
-        <Link href={`/${locale}/account/sign-in`} className="text-accent hover:underline">
+        <Link href={`/${locale}/account/sign-in`} className="text-accent-ink underline">
           {t(dict, 'signIn')}
         </Link>
       </p>

@@ -88,7 +88,7 @@ export default function ProductCard({ product, locale }: { product: ProductForCa
           />
         )}
 
-        <CardActions productId={product.id} className="absolute bottom-2 end-2 z-20" />
+        <CardActions productId={product.id} locale={locale} className="absolute bottom-2 end-2 z-20" />
 
         {/* Stretched link — covers the card for navigation; sits below the action buttons (z-20). */}
         <Link href={`/${locale}/products/${product.slug}`} aria-label={name} className="absolute inset-0 z-10" />

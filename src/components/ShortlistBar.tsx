@@ -288,7 +288,7 @@ export default function ShortlistBar({
                       <button
                         type="button"
                         onClick={copyCodes}
-                        className={copied ? `${accentBtn} !bg-green-600` : accentBtn}
+                        className={copied ? `${accentBtn} !bg-green-700` : accentBtn}
                       >
                         {copied ? `✓ ${labels.copied}` : labels.copyCodes}
                       </button>

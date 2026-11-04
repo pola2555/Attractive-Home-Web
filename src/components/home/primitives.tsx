@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 // Shared look for the home marketing bands — the old site's navy/cream/gold
 // palette, applied directly (these sections intentionally sit outside the app
@@ -11,7 +11,12 @@ const TONES = {
 } as const;
 
 export type Tone = keyof typeof TONES;
+// Eyebrow gold is theme-independent (these bands use a fixed palette). On the
+// dark navy bands the bright gold reads fine (~5.7:1); on the cream bands it
+// only hit 2.7:1, so the Section passes a darker gold (≥4.5:1 on cream) down
+// via the --eyebrow CSS var. Keep the bright one as the fallback/default.
 export const GOLD = '#C08B5C';
+const GOLD_ON_LIGHT = '#845020';
 
 export function Section({ tone: t, id, children }: { tone: Tone; id?: string; children: ReactNode }) {
   const c = TONES[t];
@@ -22,7 +27,7 @@ export function Section({ tone: t, id, children }: { tone: Tone; id?: string; ch
     <section
       id={id}
       data-nav-surface={light ? 'light' : undefined}
-      style={{ backgroundColor: c.bg, color: c.body }}
+      style={{ backgroundColor: c.bg, color: c.body, ['--eyebrow' as string]: light ? GOLD_ON_LIGHT : GOLD } as CSSProperties}
       className="px-6 sm:px-10 lg:px-16 py-20 sm:py-24"
     >
       <div className="max-w-6xl mx-auto">{children}</div>
@@ -32,7 +37,10 @@ export function Section({ tone: t, id, children }: { tone: Tone; id?: string; ch
 
 export function Eyebrow({ children }: { children: ReactNode }) {
   return (
-    <p className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>
+    <p
+      className="text-xs font-semibold tracking-[0.2em] uppercase mb-3"
+      style={{ color: `var(--eyebrow, ${GOLD})` }}
+    >
       {children}
     </p>
   );

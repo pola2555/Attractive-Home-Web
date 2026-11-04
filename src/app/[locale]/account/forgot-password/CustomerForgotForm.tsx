@@ -33,7 +33,7 @@ export default function CustomerForgotForm({
       <div className="space-y-4" dir={dir}>
         <p className="text-sm text-ink">{labels.requested}</p>
         <p className="text-center text-sm">
-          <Link href={signInHref} className="text-accent hover:underline">
+          <Link href={signInHref} className="text-accent-ink underline">
             {labels.backToSignIn}
           </Link>
         </p>
@@ -58,7 +58,7 @@ export default function CustomerForgotForm({
         {pending ? labels.submitting : labels.submit}
       </button>
       <p className="text-center text-sm">
-        <Link href={signInHref} className="text-accent hover:underline">
+        <Link href={signInHref} className="text-accent-ink underline">
           {labels.backToSignIn}
         </Link>
       </p>

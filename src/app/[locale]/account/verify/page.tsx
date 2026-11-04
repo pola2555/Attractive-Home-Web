@@ -62,7 +62,7 @@ export default async function VerifyPage({
       <div className="space-y-4 text-center">
         <p className="text-sm text-muted">{t(dict, 'verifyInvalid')}</p>
         <p className="text-sm">
-          <Link href={signInHref} className="text-accent hover:underline">
+          <Link href={signInHref} className="text-accent-ink underline">
             {t(dict, 'backToSignIn')}
           </Link>
         </p>

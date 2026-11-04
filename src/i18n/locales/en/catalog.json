@@ -79,5 +79,6 @@
     "success": "Thank you. Our team will be in touch shortly with your quote.",
     "error": "Something went wrong. Please check your details and try again.",
     "cancel": "Close"
-  }
+  },
+  "breadcrumb": "Breadcrumb"
 }

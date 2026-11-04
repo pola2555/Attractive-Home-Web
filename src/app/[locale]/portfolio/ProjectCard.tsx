@@ -24,7 +24,9 @@ export default function ProjectCard({
   const href = `/${locale}/portfolio/${project.categorySlug}/${project.slug}`;
   return (
     <div className="relative group overflow-hidden sm:rounded-lg sm:shadow-lg">
-      <Link href={href} className="block">
+      {/* The cover is the same destination as the title link below; give it an
+          accessible name so a video cover (no alt) isn't an unnamed link. */}
+      <Link href={href} className="block" aria-label={project.title}>
         <div className="relative overflow-hidden sm:rounded-lg sm:shadow-lg">
           {project.coverKey && project.coverType === 'video' ? (
             <VideoPlayer

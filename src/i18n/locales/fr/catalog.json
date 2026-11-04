@@ -79,5 +79,6 @@
     "success": "Merci. Notre équipe vous contactera prochainement avec votre devis.",
     "error": "Une erreur est survenue. Vérifiez vos informations et réessayez.",
     "cancel": "Fermer"
-  }
+  },
+  "breadcrumb": "Fil d’Ariane"
 }

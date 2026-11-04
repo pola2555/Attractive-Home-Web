@@ -99,7 +99,7 @@ export default async function ProjectPage({
         )}
         <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
         <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 text-on-media">
-          <nav className="text-sm text-on-media-soft mb-2" aria-label="Breadcrumb">
+          <nav className="text-sm text-on-media-soft mb-2" aria-label={t(dict, 'breadcrumb')}>
             <Link href={`/${locale}/portfolio`} className="hover:underline">
               {t(dict, 'title')}
             </Link>

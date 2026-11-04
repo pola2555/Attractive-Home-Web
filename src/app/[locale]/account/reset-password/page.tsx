@@ -49,7 +49,7 @@ export default async function ResetPasswordPage({
           <p className="text-sm">
             <Link
               href={`/${locale}/account/forgot-password`}
-              className="text-accent hover:underline"
+              className="text-accent-ink underline"
             >
               {t(dict, 'requestNewLink')}
             </Link>

@@ -23,6 +23,7 @@ export type NavbarLabels = {
   dashboard: string;
   languageLabel: string;
   languageNames: Record<Locale, string>;
+  menu: string;
 };
 
 const NAV_ITEMS: { key: keyof Omit<NavbarLabels, 'languageLabel' | 'languageNames'>; path: string }[] = [
@@ -236,7 +237,7 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
       </div>
 
       {/* Mobile menu button */}
-      <button className="lg:hidden text-ink focus:outline-none" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
+      <button className="lg:hidden text-ink focus:outline-none" onClick={() => setMenuOpen(!menuOpen)} aria-label={labels.menu}>
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"

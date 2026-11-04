@@ -39,6 +39,7 @@
   --heading: 230 201 168; /* #e6c9a8 headings / links */
   --accent: 196 134 74; /* #c4864a primary caramel accent */
   --accent-soft: 212 165 116; /* #d4a574 soft caramel */
+  --accent-ink: 212 165 116; /* #d4a574 — accent for SMALL text/links (needs ≥4.5:1 on dark surfaces; the brighter --accent is only ~4.3) */
   --accent-2: 230 201 168; /* #e6c9a8 light caramel chip/border bg */
   --brown: 139 69 19; /* #8b4513 brown button/accent */
   --brown-hover: 114 58 16; /* #723a10 brown hover */
@@ -62,6 +63,7 @@
   --heading: 122 74 30;
   --accent: 176 112 46;
   --accent-soft: 150 96 38;
+  --accent-ink: 132 80 32; /* #845020 — darker caramel for small text/links; ≥4.5:1 on the light surfaces + cream bands */
   --accent-2: 232 214 186;
   --brown: 139 69 19;
   --brown-hover: 110 54 16;
@@ -99,6 +101,7 @@
   --color-heading: rgb(var(--heading));
   --color-accent: rgb(var(--accent));
   --color-accent-soft: rgb(var(--accent-soft));
+  --color-accent-ink: rgb(var(--accent-ink));
   --color-accent-2: rgb(var(--accent-2));
   --color-brand-brown: rgb(var(--brown));
   --color-brand-brown-hover: rgb(var(--brown-hover));

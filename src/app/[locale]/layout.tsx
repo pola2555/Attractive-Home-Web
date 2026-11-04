@@ -86,6 +86,7 @@ export default async function LocaleLayout({
       fr: t(common, 'language.fr'),
       ru: t(common, 'language.ru'),
     },
+    menu: t(common, 'menu'),
   };
   const footerLabels: FooterLabels = {
     aboutUs: t(common, 'footer.aboutUs'),
