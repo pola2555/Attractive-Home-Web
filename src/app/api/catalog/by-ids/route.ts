@@ -8,6 +8,8 @@ import { isLocale } from '@/i18n/config';
 // published products only, capped at 60 ids.
 export const dynamic = 'force-dynamic';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type NamedRow = { translations: { localeCode: string; name: string }[] } | null;
 
 export async function GET(req: NextRequest) {
@@ -15,10 +17,14 @@ export async function GET(req: NextRequest) {
   const locale = searchParams.get('locale') ?? 'en';
   if (!isLocale(locale)) return NextResponse.json({ items: [] });
 
+  // `ids` comes from the client shortlist (localStorage) — entirely
+  // user-controlled. Product.id is a Postgres uuid column, so any non-uuid
+  // value (tampered storage, a stray injection string) would make the Prisma
+  // query throw a 500. Validate the shape first and keep only real uuids.
   const ids = (searchParams.get('ids') ?? '')
     .split(',')
     .map((s) => s.trim())
-    .filter(Boolean)
+    .filter((id) => UUID_RE.test(id))
     .slice(0, 60);
   if (ids.length === 0) return NextResponse.json({ items: [] });
 
