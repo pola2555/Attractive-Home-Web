@@ -16,7 +16,7 @@ import {
   CUSTOMER_RESET_TTL_HOURS,
 } from '@/lib/authTokens';
 import { sendCustomerVerificationEmail, sendCustomerPasswordResetEmail } from '@/lib/email';
-import { rateLimit, clientIp, tooManyMessage } from '@/lib/rate-limit';
+import { rateLimit, rateLimitPeek, rateLimitRecord, clientIp, tooManyMessage } from '@/lib/rate-limit';
 
 export type AuthState = { error?: string };
 export type RequestState = { done: boolean; error?: string };
@@ -122,12 +122,19 @@ export async function signInCustomer(
   const password = field(formData, 'password');
   if (!email || !password) return { error: 'Enter your email and password.' };
 
+  // Brute-force throttle: count FAILED sign-ins, not successful ones. A correct
+  // login flows unlimited; wrong-password attempts accumulate and lock out. We
+  // peek to gate the attempt, then record a hit only on the failure path below —
+  // so a legitimate user signing in repeatedly is never throttled, while a
+  // password-guesser is. (Enumeration is handled elsewhere: the error is generic
+  // and sign-up/reset throttle every attempt.)
   const signinIp = await clientIp();
-  const signinRl = rateLimit([
+  const signinScopes = [
     { key: `signin:email:${email}`, limit: 8, windowMs: 15 * 60_000 },
     ...(signinIp ? [{ key: `signin:ip:${signinIp}`, limit: 40, windowMs: 15 * 60_000 }] : []),
-  ]);
-  if (!signinRl.ok) return { error: tooManyMessage(signinRl.retryAfterMs) };
+  ];
+  const gate = rateLimitPeek(signinScopes);
+  if (!gate.ok) return { error: tooManyMessage(gate.retryAfterMs) };
 
   // Staff first: their credentials establish the dashboard session, but we leave
   // them on the public home page — the navbar's Dashboard link takes it from here.
@@ -136,7 +143,10 @@ export async function signInCustomer(
   try {
     await customerSignIn('credentials', { email, password, redirect: false });
   } catch (err) {
-    if (err instanceof AuthError) return { error: 'Invalid email or password.' };
+    if (err instanceof AuthError) {
+      rateLimitRecord(signinScopes); // this attempt failed — count it
+      return { error: 'Invalid email or password.' };
+    }
     throw err;
   }
   redirect(`/${locale}/account`);

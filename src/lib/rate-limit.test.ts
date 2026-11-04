@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rateLimit, tooManyMessage } from './rate-limit';
+import { rateLimit, rateLimitPeek, rateLimitRecord, tooManyMessage } from './rate-limit';
 
 const uniq = (p: string) => `${p}:${Math.random().toString(36).slice(2)}`;
 
@@ -32,6 +32,47 @@ test('a denied multi-scope call does not consume budget in the passing scope', (
   assert.equal(r.ok, false, 'tight scope denies the whole call');
   // loose must still have its single allowance (it was not consumed)
   assert.equal(rateLimit([{ key: loose, limit: 1, windowMs: 60_000 }]).ok, true);
+});
+
+test('rateLimitPeek checks without consuming budget', () => {
+  const key = uniq('peek');
+  const scope = [{ key, limit: 2, windowMs: 60_000 }];
+  // Peeking any number of times never consumes the allowance.
+  for (let i = 0; i < 10; i++) assert.equal(rateLimitPeek(scope).ok, true, `peek ${i + 1}`);
+  // ...so both real allowances are still available.
+  assert.equal(rateLimit(scope).ok, true);
+  assert.equal(rateLimit(scope).ok, true);
+  assert.equal(rateLimit(scope).ok, false);
+});
+
+test('rateLimitRecord consumes without checking, and peek then sees the limit', () => {
+  const key = uniq('rec');
+  const scope = [{ key, limit: 3, windowMs: 60_000 }];
+  rateLimitRecord(scope);
+  rateLimitRecord(scope);
+  assert.equal(rateLimitPeek(scope).ok, true, 'two hits is under the limit of 3');
+  rateLimitRecord(scope);
+  const denied = rateLimitPeek(scope);
+  assert.equal(denied.ok, false, 'third hit reaches the limit');
+  assert.ok(denied.retryAfterMs > 0 && denied.retryAfterMs <= 60_000);
+});
+
+test('peek-to-gate + record-on-failure: only failures count toward lockout', () => {
+  // Models signInCustomer: gate with peek, record only when the attempt fails.
+  const key = uniq('login');
+  const scope = [{ key, limit: 3, windowMs: 60_000 }];
+  const attempt = (fails: boolean): boolean => {
+    if (!rateLimitPeek(scope).ok) return false; // gated
+    if (fails) rateLimitRecord(scope);
+    return true;
+  };
+  // Many SUCCESSFUL logins in a row are never gated.
+  for (let i = 0; i < 20; i++) assert.equal(attempt(false), true, `success ${i + 1}`);
+  // Failures accumulate: the 4th failed attempt is locked out.
+  assert.equal(attempt(true), true);
+  assert.equal(attempt(true), true);
+  assert.equal(attempt(true), true);
+  assert.equal(attempt(true), false, 'locked out after hitting the failure limit');
 });
 
 test('tooManyMessage gives a human wait hint', () => {

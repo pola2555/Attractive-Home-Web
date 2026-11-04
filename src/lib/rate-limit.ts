@@ -22,28 +22,45 @@ function sweep(now: number) {
   }
 }
 
-// Check every scope; only record a hit against all of them if they ALL pass, so
-// a denied attempt doesn't consume budget. Returns the longest retry-after when
-// denied.
-export function rateLimit(scopes: Scope[]): RateResult {
+// Check every scope WITHOUT recording a hit. Prunes expired timestamps as it
+// goes (so the store stays bounded) and returns the longest retry-after when any
+// scope is already at its limit. Use this to gate an action whose budget should
+// only be consumed conditionally — e.g. count a FAILED login but not a
+// successful one (see signInCustomer): peek to gate, then rateLimitRecord on the
+// failure path.
+export function rateLimitPeek(scopes: Scope[]): RateResult {
   const now = Date.now();
   sweep(now);
 
   let denied: RateResult | null = null;
-  const pruned: number[][] = [];
   for (const s of scopes) {
     const hits = (store.get(s.key) ?? []).filter((t) => t > now - s.windowMs);
     store.set(s.key, hits);
-    pruned.push(hits);
     if (hits.length >= s.limit) {
       const retryAfterMs = Math.max(0, hits[0] + s.windowMs - now);
       if (!denied || retryAfterMs > denied.retryAfterMs) denied = { ok: false, retryAfterMs };
     }
   }
-  if (denied) return denied;
+  return denied ?? { ok: true, retryAfterMs: 0 };
+}
 
-  for (const hits of pruned) hits.push(now);
-  return { ok: true, retryAfterMs: 0 };
+// Record one hit against every scope (no limit check). Pairs with rateLimitPeek.
+export function rateLimitRecord(scopes: Scope[]): void {
+  const now = Date.now();
+  for (const s of scopes) {
+    const hits = (store.get(s.key) ?? []).filter((t) => t > now - s.windowMs);
+    hits.push(now);
+    store.set(s.key, hits);
+  }
+}
+
+// Check every scope; only record a hit against all of them if they ALL pass, so
+// a denied attempt doesn't consume budget. Returns the longest retry-after when
+// denied.
+export function rateLimit(scopes: Scope[]): RateResult {
+  const res = rateLimitPeek(scopes);
+  if (res.ok) rateLimitRecord(scopes);
+  return res;
 }
 
 // Client IP from proxy headers. Returns null when there is no forwarding header
