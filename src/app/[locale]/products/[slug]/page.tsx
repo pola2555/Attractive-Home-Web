@@ -6,7 +6,7 @@ import { getDictionary, t, type Dictionary } from '@/i18n/getDictionary';
 import { prisma } from '@/lib/prisma';
 import { pickTranslation, localeFilter } from '@/lib/translate';
 import { productMediaUrl } from '@/lib/media';
-import { localeUrl, pageMetadata } from '@/lib/seo';
+import { localeUrl, pageMetadata, jsonLdHtml } from '@/lib/seo';
 import { getContactSettings } from '@/lib/content';
 import { productCardInclude } from '@/lib/catalog';
 import ProductGallery from '@/components/ProductGallery';
@@ -172,7 +172,7 @@ export default async function ProductPage({
     <section className="bg-bg min-h-screen pt-28 sm:pt-32 pb-16 px-4 sm:px-6 lg:px-10">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }}
       />
       <div className="max-w-6xl mx-auto">
         <BackLink

@@ -11,7 +11,7 @@ import FavoritesProvider from '@/components/favorites/FavoritesProvider';
 import TrackingScripts from '@/components/TrackingScripts';
 import TrackingNoScript from '@/components/TrackingNoScript';
 import RouteAnalytics from '@/components/RouteAnalytics';
-import { SITE_URL } from '@/lib/seo';
+import { SITE_URL, jsonLdHtml } from '@/lib/seo';
 import { mediaOrigins } from '@/lib/media';
 import '../globals.css';
 
@@ -151,7 +151,7 @@ export default async function LocaleLayout({
         <TrackingNoScript />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdHtml(orgJsonLd) }}
         />
         <FavoritesProvider>
           <Navbar locale={locale} labels={navbarLabels} />

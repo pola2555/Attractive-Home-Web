@@ -20,6 +20,19 @@ export function alternates(locale: Locale, path: string): Metadata['alternates']
 
 export const SITE_NAME = 'Attractive Home';
 
+// Serialize data for safe embedding inside a <script type="application/ld+json">
+// tag. JSON.stringify does not escape '<', '>' or '&', so DB/catalog content
+// containing "</script>" (or the U+2028/U+2029 line separators) could otherwise
+// break out of the script element — a stored-XSS vector.
+export function jsonLdHtml(data: unknown): string {
+  return JSON.stringify(data)
+    .replaceAll('<', '\\u003c')
+    .replaceAll('>', '\\u003e')
+    .replaceAll('&', '\\u0026')
+    .replaceAll(String.fromCharCode(0x2028), '\\u2028')
+    .replaceAll(String.fromCharCode(0x2029), '\\u2029');
+}
+
 // og:locale wants a language_TERRITORY tag; map our bare language codes.
 const OG_LOCALE: Record<Locale, string> = {
   en: 'en_US',

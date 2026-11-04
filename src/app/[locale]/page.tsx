@@ -4,7 +4,7 @@ import { isLocale, type Locale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
 import { getContentBlocks, getContactSettings } from '@/lib/content';
 import { siteMediaUrl } from '@/lib/media';
-import { pageMetadata } from '@/lib/seo';
+import { pageMetadata, jsonLdHtml } from '@/lib/seo';
 import VideoPlayer from '@/components/VideoPlayer';
 import ConsultationButton from '@/components/home/ConsultationButton';
 import Introduction from '@/components/home/Introduction';
@@ -61,7 +61,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(faqJsonLd) }} />
 
       {/* Hero */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden bg-bg">
