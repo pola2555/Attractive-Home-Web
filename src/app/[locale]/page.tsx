@@ -73,9 +73,12 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         />
         <div className="absolute inset-0 bg-black opacity-50" />
         <div className="relative z-1 w-full px-4 sm:px-6 text-center text-on-media">
-          <h1 style={{ letterSpacing: '0.48px' }}>
+          <h1>
             <span className="block text-[2.25rem] sm:text-5xl font-bold mb-1 sm:mb-3">{heroTitle}</span>
-            <span className="block font-normal text-[16.8px] leading-[24px] sm:text-[21.6px] sm:leading-[33.6px]">
+            <span
+              className="block font-normal text-[16.8px] leading-[24px] sm:text-[21.6px] sm:leading-[33.6px]"
+              style={{ letterSpacing: '0.48px' }}
+            >
               {heroSubtitle}
             </span>
           </h1>

@@ -1,10 +1,11 @@
 import { t, type Dictionary } from '@/i18n/getDictionary';
 import { Section, Eyebrow, Heading } from './primitives';
 
-// Native <details>/<summary> accordion (no JS), collapsed by default and
-// left-aligned. The +/- is two bars; on open the vertical one rotates onto the
-// horizontal one and reads as a minus. The FAQPage JSON-LD is emitted by the
-// home page from the same strings.
+// Native <details>/<summary> accordion (no JS), left-aligned and collapsed by
+// default (per the owner's preference — the old site opened them on load). The
+// answers still live in the DOM for find-in-page and the FAQPage JSON-LD. The
+// +/- is two bars; on open the vertical one rotates onto the horizontal one and
+// reads as a minus. The JSON-LD is emitted by the home page from the same strings.
 export default function Faq({ dict }: { dict: Dictionary }) {
   const items = [1, 2, 3, 4, 5].map((n) => ({
     q: t(dict, `faq${n}Q`),

@@ -5,13 +5,17 @@ import ConsultationButton from './ConsultationButton';
 export default function BottomCta({ dict, whatsapp }: { dict: Dictionary; whatsapp: string }) {
   return (
     <Section tone="navyDeep">
-      <div className="max-w-2xl mx-auto text-center">
-        <Heading tone="navyDeep">{t(dict, 'bottomCtaHeading')}</Heading>
-        <p className="mt-4 text-base sm:text-lg leading-relaxed">{t(dict, 'bottomCtaBody')}</p>
-        <div className="mt-8">
+      <div className="text-center">
+        <div className="mx-auto max-w-3xl">
+          <Heading tone="navyDeep">{t(dict, 'bottomCtaHeading')}</Heading>
+        </div>
+        <p className="mx-auto mt-5 max-w-2xl text-base sm:text-lg leading-relaxed">{t(dict, 'bottomCtaBody')}</p>
+        <div className="mt-8 sm:mt-10">
           <ConsultationButton number={whatsapp} label={t(dict, 'ctaConsultation')} location="home_bottom_cta" />
         </div>
-        <p className="mt-4 text-sm opacity-80">{t(dict, 'bottomCtaNote')}</p>
+        <p className="mt-5 text-sm" style={{ color: '#7C8A96' }}>
+          {t(dict, 'bottomCtaNote')}
+        </p>
       </div>
     </Section>
   );

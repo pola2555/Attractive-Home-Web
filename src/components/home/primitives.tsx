@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 // Shared look for the home marketing bands — the old site's navy/cream/gold
 // palette, applied directly (these sections intentionally sit outside the app
@@ -6,17 +6,16 @@ import type { CSSProperties, ReactNode } from 'react';
 const TONES = {
   cream: { bg: '#FAF5EC', heading: '#0D1822', body: '#3B3B3B' },
   creamAlt: { bg: '#F2ECE1', heading: '#0D1822', body: '#3B3B3B' },
-  navy: { bg: '#111E29', heading: '#FFFFFF', body: '#F3E3CE' },
-  navyDeep: { bg: '#0D1822', heading: '#FFFFFF', body: '#F3E3CE' },
+  navy: { bg: '#111E29', heading: '#F3E3CE', body: '#9BA8B4' },
+  navyDeep: { bg: '#0D1822', heading: '#F3E3CE', body: '#9BA8B4' },
 } as const;
 
 export type Tone = keyof typeof TONES;
-// Eyebrow gold is theme-independent (these bands use a fixed palette). On the
-// dark navy bands the bright gold reads fine (~5.7:1); on the cream bands it
-// only hit 2.7:1, so the Section passes a darker gold (≥4.5:1 on cream) down
-// via the --eyebrow CSS var. Keep the bright one as the fallback/default.
+// Eyebrow gold is the old site's caramel on every band (brand parity — the home
+// page deliberately mirrors the legacy site exactly, including on the cream
+// bands where this runs below WCAG AA; that trade-off is intentional and the
+// accessibility fixes elsewhere in the app are unaffected).
 export const GOLD = '#C08B5C';
-const GOLD_ON_LIGHT = '#845020';
 
 export function Section({ tone: t, id, children }: { tone: Tone; id?: string; children: ReactNode }) {
   const c = TONES[t];
@@ -27,10 +26,10 @@ export function Section({ tone: t, id, children }: { tone: Tone; id?: string; ch
     <section
       id={id}
       data-nav-surface={light ? 'light' : undefined}
-      style={{ backgroundColor: c.bg, color: c.body, ['--eyebrow' as string]: light ? GOLD_ON_LIGHT : GOLD } as CSSProperties}
-      className="px-6 sm:px-10 lg:px-16 py-20 sm:py-24"
+      style={{ backgroundColor: c.bg, color: c.body }}
+      className="px-6 sm:px-12 py-16 sm:py-24 lg:py-28"
     >
-      <div className="max-w-6xl mx-auto">{children}</div>
+      <div className="max-w-7xl mx-auto">{children}</div>
     </section>
   );
 }
@@ -38,8 +37,8 @@ export function Section({ tone: t, id, children }: { tone: Tone; id?: string; ch
 export function Eyebrow({ children }: { children: ReactNode }) {
   return (
     <p
-      className="text-xs font-semibold tracking-[0.2em] uppercase mb-3"
-      style={{ color: `var(--eyebrow, ${GOLD})` }}
+      className="text-xs sm:text-sm font-semibold tracking-[0.2em] uppercase mb-5"
+      style={{ color: GOLD }}
     >
       {children}
     </p>
