@@ -17,7 +17,6 @@ type QuoteHeader = {
   notes: string | null;
   status: string;
   assignedTo: string | null;
-  contingencyPercent: string;
   validUntil: string | null;
   updatedAt: string;
   fxRatesAt: string | null;
@@ -93,25 +92,6 @@ export default function QuoteHeaderForm({
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className={labelCls} htmlFor="q-contingency">
-            Contingency %
-          </label>
-          <input
-            id="q-contingency"
-            name="contingencyPercent"
-            type="number"
-            step="0.1"
-            min="0"
-            max="100"
-            defaultValue={quote.contingencyPercent}
-            disabled={!canWrite}
-            className={inputCls}
-          />
-          <p className="text-muted text-xs mt-1">
-            Widens the estimate band only where a rate card gave no low/high of its own.
-          </p>
         </div>
         <div>
           <label className={labelCls} htmlFor="q-valid">

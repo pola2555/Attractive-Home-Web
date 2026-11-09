@@ -162,7 +162,6 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
           notes: quote.notes,
           status: quote.status,
           assignedTo: quote.assignedTo,
-          contingencyPercent: quote.contingencyPercent.toString(),
           validUntil: quote.validUntil ? quote.validUntil.toISOString().slice(0, 10) : null,
           updatedAt: quote.updatedAt.toISOString(),
           fxRates: (quote.fxRates as Record<string, number> | null) ?? {},

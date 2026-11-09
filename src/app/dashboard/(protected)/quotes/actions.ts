@@ -241,13 +241,11 @@ export async function updateQuote(_prev: FormState, fd: FormData): Promise<FormS
   // stay editable so a sent quote can still be marked accepted or expired.
   const changingMoreThanStatus =
     nullableStr(fd, 'title') !== current.title ||
-    nullableStr(fd, 'notes') !== current.notes ||
-    str(fd, 'contingencyPercent') !== String(current.contingencyPercent);
+    nullableStr(fd, 'notes') !== current.notes;
   if (!isEditable(current.status) && changingMoreThanStatus) {
     return { error: FROZEN_MESSAGE };
   }
 
-  const contingency = nullableNum(str(fd, 'contingencyPercent'));
   const validUntil = str(fd, 'validUntil');
 
   await prisma.quote.update({
@@ -257,7 +255,6 @@ export async function updateQuote(_prev: FormState, fd: FormData): Promise<FormS
       notes: nullableStr(fd, 'notes'),
       status: status || current.status,
       assignedTo: nullableStr(fd, 'assignedTo'),
-      contingencyPercent: contingency ?? current.contingencyPercent,
       validUntil: validUntil ? new Date(validUntil) : null,
     },
   });
