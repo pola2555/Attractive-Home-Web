@@ -5,7 +5,7 @@ import { getDictionary, t } from '@/i18n/getDictionary';
 import { prisma } from '@/lib/prisma';
 import { pickTranslation, localeFilter } from '@/lib/translate';
 import { siteMediaUrl } from '@/lib/media';
-import { pageMetadata } from '@/lib/seo';
+import { requirePagePublished, pageMetaWithOverride } from '@/lib/sitePages.server';
 import VideoPlayer from '@/components/VideoPlayer';
 import SmartImage from '@/components/SmartImage';
 
@@ -20,7 +20,7 @@ export async function generateMetadata({
   if (!isLocale(locale)) return {};
   // Short tab/SEO title; the layout appends " | Attractive Home". The long
   // marketing line stays as the on-page H1 only.
-  return pageMetadata({ locale, path: '/services', title: 'Services' });
+  return pageMetaWithOverride('services', { locale, path: '/services', title: 'Services' });
 }
 
 // The 12 services now live in the DB (docs/DATABASE.md §7) — titles and
@@ -28,6 +28,7 @@ export async function generateMetadata({
 export default async function ServicesPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('services', locale);
   const dict = await getDictionary(locale, 'services');
 
   const services = await prisma.service.findMany({

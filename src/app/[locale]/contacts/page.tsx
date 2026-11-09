@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { isLocale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
 import { getContactSettings, getContentBlocks } from '@/lib/content';
-import { pageMetadata } from '@/lib/seo';
+import { requirePagePublished, pageMetaWithOverride } from '@/lib/sitePages.server';
 import LeafletMap from '@/components/LeafletMap';
 import ContactForm, { type ContactFormLabels } from './ContactForm';
 
@@ -17,7 +17,7 @@ export async function generateMetadata({
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const dict = await getDictionary(locale, 'contacts');
-  return pageMetadata({
+  return pageMetaWithOverride('contacts', {
     locale,
     path: '/contacts',
     title: t(dict, 'contactInfo'),
@@ -31,6 +31,7 @@ export async function generateMetadata({
 export default async function ContactsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('contacts', locale);
   const [dict, settings, blocks] = await Promise.all([
     getDictionary(locale, 'contacts'),
     getContactSettings(),

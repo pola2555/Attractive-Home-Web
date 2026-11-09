@@ -5,6 +5,7 @@ import { isLocale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
 import { projectMapMarkers, DUBAI_CENTER } from '@/lib/portfolio';
 import { pageMetadata } from '@/lib/seo';
+import { requirePagePublished } from '@/lib/sitePages.server';
 import LeafletMap from '@/components/LeafletMap';
 
 export const revalidate = 3600;
@@ -31,6 +32,7 @@ export async function generateMetadata({
 export default async function PortfolioMapPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('portfolio', locale);
   const dict = await getDictionary(locale, 'portfolio');
   const markers = await projectMapMarkers(locale, t(dict, 'viewProject'));
 

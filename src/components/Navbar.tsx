@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LOCALES, LOCALE_SHORT, type Locale } from '@/i18n/config';
+import type { NavItem } from '@/lib/sitePages';
 import { useFavorites } from './favorites/FavoritesProvider';
 import useNavSurface from './useNavSurface';
 
@@ -13,11 +14,6 @@ import useNavSurface from './useNavSurface';
 // language is its own URL) instead of flipping client i18n state.
 
 export type NavbarLabels = {
-  about: string;
-  portfolio: string;
-  catalog: string;
-  contacts: string;
-  services: string;
   signIn: string;
   account: string;
   dashboard: string;
@@ -25,14 +21,6 @@ export type NavbarLabels = {
   languageNames: Record<Locale, string>;
   menu: string;
 };
-
-const NAV_ITEMS: { key: keyof Omit<NavbarLabels, 'languageLabel' | 'languageNames'>; path: string }[] = [
-  { key: 'about', path: '/about' },
-  { key: 'portfolio', path: '/portfolio' },
-  { key: 'catalog', path: '/catalog' },
-  { key: 'contacts', path: '/contacts' },
-  { key: 'services', path: '/services' },
-];
 
 // useNavSurface blends --ink/--heading/--accent/--accent-2 toward dark as the
 // bar passes over the cream home bands, so the bar text reads on cream. The
@@ -46,7 +34,15 @@ const DROPDOWN_VARS = {
   '--accent-2': '230 201 168',
 } as CSSProperties;
 
-export default function Navbar({ locale, labels }: { locale: Locale; labels: NavbarLabels }) {
+export default function Navbar({
+  locale,
+  labels,
+  navItems,
+}: {
+  locale: Locale;
+  labels: NavbarLabels;
+  navItems: NavItem[];
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -171,9 +167,9 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
           hamburger so the row can't cramp and clip (gap stays tight at lg, then
           opens up at xl where there's room). */}
       <div className="hidden lg:flex items-center gap-x-6 xl:gap-x-14 text-ink">
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <Link key={item.key} href={href(item.path)} className={`hover:text-accent ${isActive(item.path)}`}>
-            {labels[item.key]}
+            {item.label}
           </Link>
         ))}
         {canDashboard && (
@@ -251,14 +247,14 @@ export default function Navbar({ locale, labels }: { locale: Locale; labels: Nav
       {/* Mobile links */}
       {menuOpen && (
         <div className="absolute top-full left-0 w-full bg-bg/90 flex flex-col items-center space-y-5 py-5 lg:hidden">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.key}
               href={href(item.path)}
               className={`hover:text-accent ${isActive(item.path)}`}
               onClick={() => setMenuOpen(false)}
             >
-              {labels[item.key]}
+              {item.label}
             </Link>
           ))}
           {canDashboard && (

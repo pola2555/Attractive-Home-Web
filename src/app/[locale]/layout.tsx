@@ -4,6 +4,7 @@ import { Cairo } from 'next/font/google';
 import { LOCALES, isLocale, dirOf, type Locale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
 import { getContactSettings, getContentBlocks, getTrackingSettings } from '@/lib/content';
+import { getNavItems, getFooterVisibility } from '@/lib/sitePages.server';
 import Navbar, { type NavbarLabels } from '@/components/Navbar';
 import Footer, { type FooterLabels } from '@/components/Footer';
 import WhatsAppButton from '@/components/WhatsAppButton';
@@ -70,12 +71,15 @@ export default async function LocaleLayout({
     getContentBlocks(locale),
   ]);
 
+  // Visible, ordered top-nav items + footer link visibility come from the DB
+  // (an admin manages them at /dashboard/pages); a hidden page drops out of
+  // both. Labels fall back to the code i18n dictionary when not overridden.
+  const [navItems, footerVisible] = await Promise.all([
+    getNavItems(locale, (key) => t(common, `nav.${key}`)),
+    getFooterVisibility(locale),
+  ]);
+
   const navbarLabels: NavbarLabels = {
-    about: t(common, 'nav.about'),
-    portfolio: t(common, 'nav.portfolio'),
-    catalog: t(common, 'nav.catalog'),
-    contacts: t(common, 'nav.contacts'),
-    services: t(common, 'nav.services'),
     signIn: t(common, 'nav.signIn'),
     account: t(common, 'nav.account'),
     dashboard: t(common, 'nav.dashboard'),
@@ -155,11 +159,16 @@ export default async function LocaleLayout({
           dangerouslySetInnerHTML={{ __html: jsonLdHtml(orgJsonLd) }}
         />
         <FavoritesProvider>
-          <Navbar locale={locale} labels={navbarLabels} />
+          <Navbar locale={locale} labels={navbarLabels} navItems={navItems} />
           <main id="main" tabIndex={-1}>{children}</main>
           <WhatsAppButton number={settings.whatsapp} label={t(common, 'whatsapp')} />
         </FavoritesProvider>
-        <Footer locale={locale} labels={footerLabels} socialLinks={settings.socialLinks} />
+        <Footer
+          locale={locale}
+          labels={footerLabels}
+          socialLinks={settings.socialLinks}
+          visible={footerVisible}
+        />
         <RouteAnalytics locale={locale} />
         <TrackingScripts />
       </body>

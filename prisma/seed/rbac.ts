@@ -20,6 +20,11 @@ const PERMISSIONS = [
     module: 'content',
     description: 'Edit services, content blocks and sample rooms',
   },
+  {
+    slug: 'pages.write',
+    module: 'content',
+    description: 'Manage public pages — hide/show, rename menu labels, edit SEO and page text',
+  },
   { slug: 'leads.read', module: 'leads', description: 'View leads' },
   { slug: 'leads.write', module: 'leads', description: 'Update, assign and annotate leads' },
   { slug: 'settings.write', module: 'settings', description: 'Edit site settings' },

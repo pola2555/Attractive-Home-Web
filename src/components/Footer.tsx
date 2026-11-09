@@ -27,23 +27,32 @@ export default function Footer({
   locale,
   labels,
   socialLinks,
+  visible,
 }: {
   locale: Locale;
   labels: FooterLabels;
   socialLinks: SocialLink[];
+  // Which footer-eligible pages are shown (managed at /dashboard/pages). A
+  // hidden page drops its link(s); missing key defaults to shown.
+  visible?: Record<string, boolean>;
 }) {
   const href = (path: string) => `/${locale}${path}`;
+  const shown = (key: string) => visible?.[key] ?? true;
   const leftLinks = [
-    { label: labels.aboutUs, path: '/about' },
-    { label: labels.contacts, path: '/contacts' },
-    { label: labels.services, path: '/services' },
-  ];
-  const middleLinks = [
-    { label: labels.portfolio, path: '/portfolio' },
-    { label: labels.architectural, path: '/portfolio/architectural' },
-    { label: labels.interior, path: '/portfolio/interior' },
-    { label: labels.fitOut, path: '/portfolio/fit' },
-  ];
+    { label: labels.aboutUs, path: '/about', show: shown('about') },
+    { label: labels.contacts, path: '/contacts', show: shown('contacts') },
+    { label: labels.services, path: '/services', show: shown('services') },
+  ].filter((l) => l.show);
+  // The portfolio column (and its three category links) all hang off the one
+  // portfolio page's visibility.
+  const middleLinks = shown('portfolio')
+    ? [
+        { label: labels.portfolio, path: '/portfolio' },
+        { label: labels.architectural, path: '/portfolio/architectural' },
+        { label: labels.interior, path: '/portfolio/interior' },
+        { label: labels.fitOut, path: '/portfolio/fit' },
+      ]
+    : [];
 
   return (
     <footer className="relative text-ink py-32 overflow-hidden bg-bg-deep">
@@ -94,14 +103,16 @@ export default function Footer({
                 );
               })}
             </div>
-            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-              <Link href={href('/legal/privacy')} className="hover:text-gray-300">
-                {labels.privacy}
-              </Link>
-              <Link href={href('/legal/terms')} className="hover:text-gray-300">
-                {labels.terms}
-              </Link>
-            </div>
+            {shown('legal') && (
+              <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                <Link href={href('/legal/privacy')} className="hover:text-gray-300">
+                  {labels.privacy}
+                </Link>
+                <Link href={href('/legal/terms')} className="hover:text-gray-300">
+                  {labels.terms}
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>

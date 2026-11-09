@@ -62,6 +62,47 @@ model ContentBlockTranslation {
   @@map("content_block_translations")
 }
 
+// Admin-managed state for the fixed set of public "outer" pages (home, about,
+// portfolio, catalog, contacts, services, legal). The page set, routes and
+// which pages may be hidden live in CODE (src/lib/sitePages.ts, so the
+// home-can't-be-hidden rule is enforced in code and can't be bypassed by a DB
+// edit); this table stores ONLY the mutable flags an admin edits from
+// /dashboard/pages. A missing row = code defaults (visible, in nav/footer).
+model SitePage {
+  id           String   @id @db.Uuid
+  key          String   @unique // 'home' | 'about' | 'portfolio' | 'catalog' | 'contacts' | 'services' | 'legal'
+  isPublished  Boolean  @default(true) @map("is_published")
+  showInNav    Boolean  @default(true) @map("show_in_nav")
+  showInFooter Boolean  @default(true) @map("show_in_footer")
+  navSortOrder Int      @default(0) @map("nav_sort_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  translations SitePageTranslation[]
+
+  @@map("site_pages")
+}
+
+// Per-locale overrides for a public page. navLabel overrides the code i18n menu
+// label; metaTitle/metaDescription override the page's <title>/description. All
+// nullable — a blank value falls back to the code default (docs/DATABASE.md §3
+// fallback chain). zh is the non-public source language and is never written here.
+model SitePageTranslation {
+  id              String  @id @db.Uuid
+  sitePageId      String  @map("site_page_id") @db.Uuid
+  localeCode      String  @map("locale_code") @db.VarChar(8)
+  navLabel        String? @map("nav_label")
+  metaTitle       String? @map("meta_title")
+  metaDescription String? @map("meta_description")
+
+  sitePage SitePage @relation(fields: [sitePageId], references: [id], onDelete: Cascade)
+  locale   Locale   @relation(fields: [localeCode], references: [code], onDelete: Restrict)
+
+  @@unique([sitePageId, localeCode])
+  @@index([localeCode])
+  @@map("site_page_translations")
+}
+
 model SampleRoom {
   id          String   @id @db.Uuid
   imageKey    String   @map("image_key")

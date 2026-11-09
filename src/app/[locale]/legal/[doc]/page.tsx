@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { LOCALES, isLocale } from '@/i18n/config';
 import { getContactSettings, getContentBlocks } from '@/lib/content';
 import { SITE_URL, pageMetadata } from '@/lib/seo';
+import { requirePagePublished } from '@/lib/sitePages.server';
 import { legalDoc, LEGAL_DOCS, type LegalDocKind } from '@/lib/legal';
 
 export const revalidate = 86400;
@@ -41,6 +42,7 @@ export default async function LegalPage({
 }) {
   const { locale, doc } = await params;
   if (!isLocale(locale) || !isDoc(doc)) notFound();
+  await requirePagePublished('legal', locale);
 
   const [settings, blocks] = await Promise.all([getContactSettings(), getContentBlocks(locale)]);
   const data = legalDoc(doc, {

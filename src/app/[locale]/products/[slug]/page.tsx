@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { pickTranslation, localeFilter } from '@/lib/translate';
 import { productMediaUrl } from '@/lib/media';
 import { localeUrl, pageMetadata, jsonLdHtml } from '@/lib/seo';
+import { requirePagePublished } from '@/lib/sitePages.server';
 import { getContactSettings } from '@/lib/content';
 import { productCardInclude } from '@/lib/catalog';
 import ProductGallery from '@/components/ProductGallery';
@@ -112,6 +113,7 @@ export default async function ProductPage({
 }) {
   const { locale, slug } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('catalog', locale);
   const product = await loadProduct(locale, slug);
   if (!product || !product.isPublished) notFound();
 

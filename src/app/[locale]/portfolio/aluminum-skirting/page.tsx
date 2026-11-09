@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { LOCALES, isLocale } from '@/i18n/config';
 import { getDictionary, t } from '@/i18n/getDictionary';
 import { pageMetadata } from '@/lib/seo';
+import { requirePagePublished } from '@/lib/sitePages.server';
 import { siteMediaUrl } from '@/lib/media';
 import SmartImage from '@/components/SmartImage';
 import BackLink from '@/components/BackLink';
@@ -40,6 +41,7 @@ export default async function AluminumSkirtingPage({
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('portfolio', locale);
   const dict = await getDictionary(locale, 'portfolio');
   const tr = (key: string) => t(dict, `aluminum.${key}`);
 

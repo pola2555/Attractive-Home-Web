@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { pickTranslation } from '@/lib/translate';
 import { siteMediaUrl } from '@/lib/media';
 import { pageMetadata } from '@/lib/seo';
+import { requirePagePublished } from '@/lib/sitePages.server';
 import VideoPlayer from '@/components/VideoPlayer';
 import SmartImage from '@/components/SmartImage';
 import BackLink from '@/components/BackLink';
@@ -48,6 +49,7 @@ export default async function ProjectPage({
 }) {
   const { locale, category, slug } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('portfolio', locale);
 
   const project = await getProject(locale, slug);
   if (!project) {

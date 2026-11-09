@@ -7,7 +7,7 @@ import { getDictionary, t } from '@/i18n/getDictionary';
 import { getContentBlocks } from '@/lib/content';
 import { projectMapMarkers, DUBAI_CENTER } from '@/lib/portfolio';
 import { siteMediaUrl } from '@/lib/media';
-import { pageMetadata } from '@/lib/seo';
+import { requirePagePublished, pageMetaWithOverride } from '@/lib/sitePages.server';
 import VideoPlayer from '@/components/VideoPlayer';
 import LeafletMap from '@/components/LeafletMap';
 
@@ -44,7 +44,7 @@ export async function generateMetadata({
   if (!isLocale(locale)) return {};
   const dict = await getDictionary(locale, 'about');
   const blocks = await getContentBlocks(locale);
-  return pageMetadata({
+  return pageMetaWithOverride('about', {
     locale,
     path: '/about',
     title: t(dict, 'aboutUs'),
@@ -55,6 +55,7 @@ export async function generateMetadata({
 export default async function AboutPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('about', locale);
   const [dict, blocks] = await Promise.all([getDictionary(locale, 'about'), getContentBlocks(locale)]);
   const markers = await projectMapMarkers(locale, t(dict, 'viewProject'));
 

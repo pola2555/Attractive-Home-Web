@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { pickTranslation } from '@/lib/translate';
 import { siteMediaUrl } from '@/lib/media';
 import { pageMetadata } from '@/lib/seo';
+import { requirePagePublished } from '@/lib/sitePages.server';
 import VideoPlayer from '@/components/VideoPlayer';
 import ProjectCard from '../ProjectCard';
 import BackLink from '@/components/BackLink';
@@ -45,6 +46,7 @@ export default async function PortfolioCategoryPage({
 }) {
   const { locale, category } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('portfolio', locale);
   const [dict, categories, projects] = await Promise.all([
     getDictionary(locale, 'portfolio'),
     getCategories(locale),

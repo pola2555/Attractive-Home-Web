@@ -7,6 +7,7 @@ import { seedLocales } from './locales';
 import { seedRbac, seedAdminUser } from './rbac';
 import { seedSettings } from './settings';
 import { seedContentBlocks } from './content-blocks';
+import { seedSitePages } from './sitePages';
 import { seedLanded } from './landed';
 import { seedConfigurator } from './configurator';
 import { seedBenison } from './benison';
@@ -20,6 +21,7 @@ async function main(): Promise<void> {
   await seedAdminUser(prisma);
   await seedSettings(prisma);
   await seedContentBlocks(prisma);
+  await seedSitePages(prisma);
   await seedLanded(prisma);
   await seedConfigurator(prisma);
   await seedBenison(prisma);

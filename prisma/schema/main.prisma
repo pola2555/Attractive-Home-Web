@@ -92,6 +92,7 @@ model Locale {
   projectMediaTranslations         ProjectMediaTranslation[]
   serviceTranslations              ServiceTranslation[]
   contentBlockTranslations         ContentBlockTranslation[]
+  sitePageTranslations             SitePageTranslation[]
   optionGroupTranslations          OptionGroupTranslation[]
   optionValueTranslations          OptionValueTranslation[]
   leads                            Lead[]

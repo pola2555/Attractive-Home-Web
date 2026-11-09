@@ -26,7 +26,7 @@ import {
   type ShopKey,
 } from '@/lib/catalogShopByConfig';
 import { getBrandShopConfig } from '@/lib/catalogBrandShopConfig';
-import { pageMetadata } from '@/lib/seo';
+import { requirePagePublished, pageMetaWithOverride } from '@/lib/sitePages.server';
 import ProductCard from '@/components/ProductCard';
 import FiltersSidebar, { catalogHref } from './FiltersSidebar';
 import CatalogFilters from './CatalogFilters';
@@ -42,7 +42,7 @@ export async function generateMetadata({
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const dict = await getDictionary(locale, 'catalog');
-  return pageMetadata({
+  return pageMetaWithOverride('catalog', {
     locale,
     path: '/catalog',
     title: t(dict, 'libraryTitle'),
@@ -62,6 +62,7 @@ export default async function CatalogPage({
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('catalog', locale);
   const filters = parseCatalogFilters(await searchParams);
   // Browse tiles only make sense on the unfiltered landing view.
   const showShopBy = !FACET_KEYS.some((k) => filters[k]?.length) && !filters.q;

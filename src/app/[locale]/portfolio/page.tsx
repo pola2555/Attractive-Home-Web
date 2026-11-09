@@ -6,7 +6,7 @@ import { getDictionary, t } from '@/i18n/getDictionary';
 import { getCategories, getProjects } from '@/lib/portfolio';
 import { pickTranslation } from '@/lib/translate';
 import { siteMediaUrl } from '@/lib/media';
-import { pageMetadata } from '@/lib/seo';
+import { requirePagePublished, pageMetaWithOverride } from '@/lib/sitePages.server';
 import VideoPlayer from '@/components/VideoPlayer';
 import ProjectCard from './ProjectCard';
 
@@ -22,7 +22,7 @@ export async function generateMetadata({
   const dict = await getDictionary(locale, 'portfolio');
   // Tab title in title case ("Portfolio | Attractive Home") — the i18n `title`
   // is all-caps because it doubles as the big hero H1, so it's not reused here.
-  return pageMetadata({
+  return pageMetaWithOverride('portfolio', {
     locale,
     path: '/portfolio',
     title: 'Portfolio',
@@ -36,6 +36,7 @@ export async function generateMetadata({
 export default async function PortfolioPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  await requirePagePublished('portfolio', locale);
   const [dict, categories, projects] = await Promise.all([
     getDictionary(locale, 'portfolio'),
     getCategories(locale),
